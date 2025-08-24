@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/your-app/static/css/main.7c2c0fde.css",
-    "main.js": "/your-app/static/js/main.92393c1d.js",
-    "static/js/453.7726d02d.chunk.js": "/your-app/static/js/453.7726d02d.chunk.js",
-    "index.html": "/your-app/index.html",
-    "main.7c2c0fde.css.map": "/your-app/static/css/main.7c2c0fde.css.map",
-    "main.92393c1d.js.map": "/your-app/static/js/main.92393c1d.js.map",
-    "453.7726d02d.chunk.js.map": "/your-app/static/js/453.7726d02d.chunk.js.map"
+    "main.css": "/work-to-buy/static/css/main.7c2c0fde.css",
+    "main.js": "/work-to-buy/static/js/main.ebbfec92.js",
+    "static/js/453.7726d02d.chunk.js": "/work-to-buy/static/js/453.7726d02d.chunk.js",
+    "index.html": "/work-to-buy/index.html",
+    "main.7c2c0fde.css.map": "/work-to-buy/static/css/main.7c2c0fde.css.map",
+    "main.ebbfec92.js.map": "/work-to-buy/static/js/main.ebbfec92.js.map",
+    "453.7726d02d.chunk.js.map": "/work-to-buy/static/js/453.7726d02d.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.7c2c0fde.css",
-    "static/js/main.92393c1d.js"
+    "static/js/main.ebbfec92.js"
   ]
 }
