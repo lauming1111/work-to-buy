@@ -1,7 +1,7 @@
 {
   "name": "buy",
   "version": "0.1.0",
-  "homepage": "http://lauming1111.github.io/work-to-buy",
+  "homepage": "https://lauming1111.github.io/work-to-buy",
   "private": true,
   "dependencies": {
     "@testing-library/dom": "^10.4.1",

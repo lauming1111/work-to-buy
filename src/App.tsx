@@ -1,344 +1,449 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { JSX, useEffect, useMemo, useState } from "react";
+import "./App.css";
 
-function round2(n: number) { return Math.round(n * 100) / 100; }
-function ymd(d: Date) { return d.toISOString().split("T")[0]; }
-function startOfMonth(d: Date) { return new Date(d.getFullYear(), d.getMonth(), 1); }
-function endOfMonth(d: Date) { return new Date(d.getFullYear(), d.getMonth() + 1, 0); }
+type Item = {
+  id: number;
+  name: string;
+  price: number;
+  taxable: boolean;
+  enabled: boolean;
+};
 
-interface Entry { date: string; hours: number; earnings: number; tax: number; }
-interface Item { id: number; name: string; price: number; taxable?: boolean; taxRate?: number; enabled?: boolean; }
+type DayRecord = {
+  date: string;          // YYYY-MM-DD
+  hours: number | null;  // null means empty
+  earnings: number;      // computed
+  taxPaid: number;       // computed
+};
 
 const defaultItems: Item[] = [
-  { id: 1, name: "Rent", price: 0, taxable: false, taxRate: 0, enabled: true },
-  { id: 2, name: "Food / Groceries", price: 0, taxable: false, taxRate: 0, enabled: true },
-  { id: 3, name: "Transportation", price: 0, taxable: false, taxRate: 0, enabled: true },
+  { id: 1, name: "Rent", price: 0, taxable: false, enabled: true },
+  { id: 2, name: "Food / Groceries", price: 0, taxable: true, enabled: true },
+  { id: 3, name: "Transportation", price: 0, taxable: true, enabled: true },
 ];
 
-export default function WorkToBuyPlanner() {
+const INCOME_TAX_RATE = 0.13;
+const WEEKLY_OT_THRESHOLD = 44;
+const BIWEEKLY_TAXFREE_THRESHOLD = 80;
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+const ymd = (d: Date) => d.toISOString().slice(0, 10);
+
+export default function App(): JSX.Element {
+  // --- persisted state
+  const [items, setItems] = useState<Item[]>(
+    () => JSON.parse(localStorage.getItem("w2b_items") || "null") || defaultItems
+  );
+  const [hourlyRate, setHourlyRate] = useState<number>(
+    () => Number(localStorage.getItem("w2b_hourlyRate") || "17.2")
+  );
+  const [history, setHistory] = useState<DayRecord[]>(
+    () => JSON.parse(localStorage.getItem("w2b_history") || "null") || []
+  );
+  const [startDate, setStartDate] = useState<string>(
+    () => localStorage.getItem("w2b_startDate") || ymd(new Date())
+  );
+  const [currentDate, setCurrentDate] = useState<Date>(() => {
+    const s = localStorage.getItem("w2b_currentDate");
+    return s ? new Date(s) : new Date();
+  });
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    const v = localStorage.getItem("w2b_dark");
+    return v ? v === "1" : false; // default light
+  });
+
+  // transient UI
+  const [notification, setNotification] = useState<string>("");
+  const [confirmClear, setConfirmClear] = useState<boolean>(false);
+
+  // persist relevant state
+  useEffect(() => localStorage.setItem("w2b_items", JSON.stringify(items)), [items]);
+  useEffect(() => localStorage.setItem("w2b_hourlyRate", String(hourlyRate)), [hourlyRate]);
+  useEffect(() => localStorage.setItem("w2b_history", JSON.stringify(history)), [history]);
+  useEffect(() => localStorage.setItem("w2b_startDate", startDate), [startDate]);
+  useEffect(() => localStorage.setItem("w2b_currentDate", currentDate.toISOString()), [currentDate]);
+  useEffect(() => localStorage.setItem("w2b_dark", darkMode ? "1" : "0"), [darkMode]);
+
+  const notify = (msg: string) => {
+    setNotification(msg);
+    const t = setTimeout(() => setNotification(""), 3000);
+    return () => clearTimeout(t);
+  };
+
+  // --- items helpers
+  const handleItemChange = (id: number, field: keyof Item, value: string | boolean) => {
+    setItems(prev =>
+      prev.map(it =>
+        it.id === id
+          ? {
+            ...it,
+            [field]:
+              field === "price" ? Number(value) : field === "enabled" || field === "taxable" ? Boolean(value) : value,
+          }
+          : it
+      )
+    );
+  };
+  const addItem = () => {
+    setItems(prev => [...prev, { id: Date.now(), name: `Item ${prev.length + 1}`, price: 0, taxable: true, enabled: true }]);
+  };
+  const removeItem = (id: number) => setItems(prev => prev.filter(i => i.id !== id));
+
+  // --- calendar helpers
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth(); // 0-11
+  const startOfMonth = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstWeekday = startOfMonth.getDay(); // 0..6
+  const totalCells = firstWeekday + daysInMonth;
+  const rows = Math.ceil(totalCells / 7);
+  const totalGrid = rows * 7;
   const todayStr = ymd(new Date());
-  const [hourlyRate, setHourlyRate] = useState(17.2);
-  const [items, setItems] = useState<Item[]>([]);
-  const [history, setHistory] = useState<Entry[]>([]);
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [startDate, setStartDate] = useState(todayStr);
-  const [notification, setNotification] = useState<{ message: string, visible: boolean }>({ message: "", visible: false });
 
-  useEffect(() => {
-    const savedItems = localStorage.getItem("items");
-    if (savedItems) setItems(JSON.parse(savedItems));
-    else setItems(defaultItems);
+  const getDayRecord = (dateStr: string) => history.find(h => h.date === dateStr) || null;
 
-    const savedHistory = localStorage.getItem("history");
-    if (savedHistory) setHistory(JSON.parse(savedHistory));
-    else setHistory([]);
-
-    const savedStart = localStorage.getItem("startDate");
-    if (savedStart) setStartDate(savedStart);
-
-    const savedRate = localStorage.getItem("hourlyRate");
-    if (savedRate) setHourlyRate(JSON.parse(savedRate));
-  }, []);
-
-  function showNotification(msg: string) {
-    setNotification({ message: msg, visible: true });
-    setTimeout(() => setNotification(prev => ({ ...prev, visible: false })), 3000);
-  }
-
-  function estimateIncomeTax(hourlyRate: number, dailyHours: number) {
-    const weeksPerYear = 52;
-    const projectedAnnual = hourlyRate * dailyHours * weeksPerYear;
-    let rate = 0.15;
-    if (projectedAnnual <= 53359) rate = 0.15;
-    else if (projectedAnnual <= 106717) rate = 0.25;
-    else if (projectedAnnual <= 165430) rate = 0.33;
-    else rate = 0.45;
-    return round2(dailyHours * hourlyRate * rate);
-  }
-
-  function updateDay(date: string, hours: number) {
-    hours = Math.max(0, Math.min(24, hours));
-    const earnings = round2(hours * hourlyRate);
-    const incomeTax = estimateIncomeTax(hourlyRate, hours);
-    setHistory(prev => {
-      const idx = prev.findIndex(e => e.date === date);
-      const newEntry = { date, hours, earnings, tax: incomeTax };
-      if (idx >= 0) { const copy = [...prev]; copy[idx] = newEntry; return copy; }
-      return [...prev, newEntry].sort((a, b) => a.date.localeCompare(b.date));
-    });
-  }
-
-  const calendarCells = useMemo(() => {
-    const first = startOfMonth(currentMonth);
-    const last = endOfMonth(currentMonth);
-    const firstWeekday = first.getDay();
-    const map = new Map(history.map(e => [e.date, e] as const));
-    const cells: any[] = [];
-    for (let i = 0; i < firstWeekday; i++) cells.push({ date: null, key: `b${i}` });
-    for (let d = 1; d <= last.getDate(); d++) {
-      const dt = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), d);
-      const key = ymd(dt);
-      const entry = map.get(key) || { date: key, hours: 0, earnings: 0, tax: 0 };
-      cells.push({ date: dt, entry, key });
+  const handleHourInput = (date: string, hours: string) => {
+    let h: number | null = hours === "" ? null : Number(hours);
+    if (h !== null) {
+      if (isNaN(h)) h = null;
+      else h = Math.max(0, Math.min(24, h));
     }
-    while (cells.length % 7 !== 0) cells.push({ date: null, key: `t${cells.length}` });
-    while (cells.length < 42) cells.push({ date: null, key: `t${cells.length}` });
-    return cells;
-  }, [currentMonth, history]);
-
-  const enabledItems = items.filter(i => i.enabled);
-  const totalAfterTaxItemPrice = enabledItems.reduce((sum, item) => {
-    const taxRate = item.taxable ? (item.taxRate ?? 0.13) : 0;
-    return sum + item.price * (1 + taxRate);
-  }, 0);
-  const totalItemTax = round2(enabledItems.reduce((s, i) => s + (i.taxable ? i.price * (i.taxRate ?? 0.13) : 0), 0));
-
-  const tableData = useMemo(() => {
-    const sorted = history.filter(h => h.hours > 0).sort((a, b) => a.date.localeCompare(b.date));
-    let cumulative = 0;
-    return sorted.map(h => {
-      const afterTax = h.earnings - h.tax;
-      const dayPercent = totalAfterTaxItemPrice > 0 ? round2(afterTax / totalAfterTaxItemPrice * 100) : 0;
-      cumulative += dayPercent;
-      return { ...h, cumulative: Math.min(round2(cumulative), 100), dayPercent };
+    setHistory(prev => {
+      const filtered = prev.filter(x => x.date !== date);
+      if (h === null) return filtered;
+      return [...filtered, { date, hours: h, earnings: 0, taxPaid: 0 }];
     });
-  }, [history, totalAfterTaxItemPrice]);
+  };
 
-  const totalProgress = tableData.length ? Math.min(100, round2(tableData[tableData.length - 1].cumulative)) : 0;
-  const totalEarned = round2(tableData.reduce((sum, h) => sum + h.earnings - h.tax, 0));
+  // --- compute earnings & tax applying weekly OT and biweekly taxfree
+  const detailedHistory = useMemo(() => {
+    if (history.length === 0) return [];
 
-  const averageDailyHours = useMemo(() => {
-    const daysWorked = history.filter(h => h.hours > 0);
-    if (daysWorked.length === 0) return 0;
-    const totalHours = daysWorked.reduce((sum, h) => sum + h.hours, 0);
-    return totalHours / daysWorked.length;
-  }, [history]);
+    const start = new Date(startDate);
+    const sorted = [...history].sort((a, b) => a.date.localeCompare(b.date));
 
-  const remainingAmount = Math.max(0, totalAfterTaxItemPrice - totalEarned);
-  const estimatedHoursLeft = averageDailyHours > 0 ? round2(remainingAmount / hourlyRate) : 0;
-  const estimatedDaysLeft = averageDailyHours > 0 ? round2(estimatedHoursLeft / averageDailyHours) : 0;
+    const indexInfo = (d: string) => {
+      const dt = new Date(d);
+      const diffDays = Math.floor((dt.getTime() - start.getTime()) / (1000 * 3600 * 24));
+      return {
+        weekIndex: Math.floor(diffDays / 7),
+        biWeekIndex: Math.floor(diffDays / 14),
+        diffDays,
+      };
+    };
 
-  function addItem() {
-    const newId = items.length ? Math.max(...items.map(i => i.id)) + 1 : 1;
-    setItems([...items, { id: newId, name: `Item ${newId}`, price: 0, taxable: true, taxRate: 0.13, enabled: true }]);
-  }
-  function removeItem(id: number) { setItems(items.filter(i => i.id !== id)); }
+    // weekly and biweekly totals precomputed
+    const weeklyTotals = new Map<number, number>();
+    const biWeeklyTotals = new Map<number, number>();
 
-  function saveAllInputs() {
-    const updatedHistory = [...history];
-    calendarCells.forEach(cell => {
-      if (cell.entry) {
-        const idx = updatedHistory.findIndex(h => h.date === cell.entry.date);
-        const earnings = round2(cell.entry.hours * hourlyRate);
-        const tax = estimateIncomeTax(hourlyRate, cell.entry.hours);
-        const entry = { date: cell.entry.date, hours: cell.entry.hours, earnings, tax };
-        if (idx >= 0) updatedHistory[idx] = entry;
-        else updatedHistory.push(entry);
+    for (const r of sorted) {
+      const idx = indexInfo(r.date).weekIndex;
+      weeklyTotals.set(idx, (weeklyTotals.get(idx) || 0) + (r.hours || 0));
+      const bidx = indexInfo(r.date).biWeekIndex;
+      biWeeklyTotals.set(bidx, (biWeeklyTotals.get(bidx) || 0) + (r.hours || 0));
+    }
+
+    const results: DayRecord[] = [];
+
+    for (const day of sorted) {
+      const h = day.hours || 0;
+      if (h <= 0) {
+        results.push({ ...day, earnings: 0, taxPaid: 0 });
+        continue;
       }
-    });
-    setHistory(updatedHistory);
-    localStorage.setItem("history", JSON.stringify(updatedHistory));
-    localStorage.setItem("items", JSON.stringify(items));
-    localStorage.setItem("hourlyRate", JSON.stringify(hourlyRate));
-    localStorage.setItem("startDate", startDate);
-    showNotification("All inputs saved successfully!");
-  }
+      const { weekIndex, biWeekIndex } = indexInfo(day.date);
+      const weekHours = weeklyTotals.get(weekIndex) || 0;
+      const biWeekHours = biWeeklyTotals.get(biWeekIndex) || 0;
 
-  function clearAll() {
+      // weekly OT (hours beyond threshold)
+      const weekOT = Math.max(0, weekHours - WEEKLY_OT_THRESHOLD);
+      // prorate OT to the day based on day share
+      let dayOT = 0;
+      let dayReg = h;
+      if (weekHours > 0 && weekOT > 0) {
+        const dayShare = h / weekHours;
+        dayOT = round2(weekOT * dayShare);
+        dayReg = Math.max(0, round2(h - dayOT));
+      }
+
+      // bi-weekly tax-free hours proportional
+      let dayTaxFree = 0;
+      if (biWeekHours > BIWEEKLY_TAXFREE_THRESHOLD && biWeekHours > 0) {
+        const extra = biWeekHours - BIWEEKLY_TAXFREE_THRESHOLD;
+        dayTaxFree = round2((h / biWeekHours) * extra);
+        dayTaxFree = Math.min(dayTaxFree, h);
+      }
+
+      // proportionally remove tax-free from reg & OT
+      const totalDayHours = Math.max(1e-9, dayReg + dayOT);
+      const taxFreeReg = round2(dayTaxFree * (dayReg / totalDayHours));
+      const taxFreeOT = round2(dayTaxFree * (dayOT / totalDayHours));
+
+      const taxableReg = Math.max(0, dayReg - taxFreeReg);
+      const taxableOT = Math.max(0, dayOT - taxFreeOT);
+
+      // earnings
+      const earnings = dayReg * hourlyRate + dayOT * hourlyRate * 1.5;
+
+      // taxable earnings for income tax
+      const taxableEarnings = taxableReg * hourlyRate + taxableOT * hourlyRate * 1.5;
+
+      const taxPaid = round2(taxableEarnings * INCOME_TAX_RATE);
+
+      results.push({ date: day.date, hours: h, earnings: round2(earnings), taxPaid });
+    }
+
+    return results;
+  }, [history, hourlyRate, startDate]);
+
+  // totals and progress
+  const totalEarnedAfterTax = useMemo(
+    () => round2(detailedHistory.reduce((s, d) => s + (d.earnings - d.taxPaid), 0)),
+    [detailedHistory]
+  );
+
+  const totalItemPrice = useMemo(() => items.filter(i => i.enabled).reduce((s, i) => s + (i.price || 0), 0), [items]);
+  const totalItemTax = useMemo(() => items.filter(i => i.enabled && i.taxable).reduce((s, i) => s + (i.price || 0) * INCOME_TAX_RATE, 0), [items]);
+  const totalAfterTaxItemPrice = useMemo(() => round2(totalItemPrice + totalItemTax), [totalItemPrice, totalItemTax]);
+
+  const progressPct = useMemo(() => (totalAfterTaxItemPrice > 0 ? Math.min(100, round2((totalEarnedAfterTax / totalAfterTaxItemPrice) * 100)) : 0), [totalAfterTaxItemPrice, totalEarnedAfterTax]);
+
+  // actions
+  const resetMonthHours = () => {
+    const prefix = `${year}-${String(month + 1).padStart(2, "0")}-`;
+    setHistory(prev => prev.filter(h => !h.date.startsWith(prefix)));
+    notify("Month hours reset");
+  };
+
+  const saveAll = () => {
+    localStorage.setItem("w2b_items", JSON.stringify(items));
+    localStorage.setItem("w2b_hourlyRate", String(hourlyRate));
+    localStorage.setItem("w2b_history", JSON.stringify(history));
+    localStorage.setItem("w2b_startDate", startDate);
+    localStorage.setItem("w2b_dark", darkMode ? "1" : "0");
+    notify("Saved");
+  };
+
+  const clearAll = () => {
+    // confirm modal shown via confirmClear toggle
+    setConfirmClear(true);
+  };
+
+  const confirmClearNow = () => {
     setItems(defaultItems);
     setHistory([]);
     setHourlyRate(17.2);
-    setStartDate(todayStr);
-    localStorage.removeItem("items");
-    localStorage.removeItem("history");
-    localStorage.removeItem("hourlyRate");
-    localStorage.removeItem("startDate");
-    showNotification("All data cleared successfully!");
-  }
+    setStartDate(ymd(new Date()));
+    setDarkMode(false);
+    localStorage.clear();
+    setConfirmClear(false);
+    notify("All cleared");
+  };
 
-  function prevMonth() { setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1)); }
-  function nextMonth() { setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1)); }
+  const autoFillWeekdays = () => {
+    const input = prompt("Auto-fill weekdays hours for this month (leave blank for 8):", "8");
+    if (input === null) return;
+    const h = Number(input || "8");
+    if (isNaN(h) || h < 0 || h > 24) {
+      notify("Invalid hours");
+      return;
+    }
+    const prefix = `${year}-${String(month + 1).padStart(2, "0")}-`;
+    const newEntries: DayRecord[] = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${prefix}${String(d).padStart(2, "0")}`;
+      const dt = new Date(year, month, d);
+      const wk = dt.getDay();
+      if (wk !== 0 && wk !== 6) newEntries.push({ date: dateStr, hours: h, earnings: 0, taxPaid: 0 });
+    }
+    setHistory(prev => {
+      const filtered = prev.filter(r => !r.date.startsWith(prefix));
+      return [...filtered, ...newEntries];
+    });
+    notify("Auto-filled weekdays");
+  };
 
+  // UI helpers to render grid
   return (
-    <div className="min-h-screen p-4 flex justify-center bg-gray-100">
-      <div className="w-full max-w-6xl bg-white rounded-2xl p-6 shadow-2xl">
-        <h1 className="text-3xl font-bold text-center mb-6 text-indigo-600">Work-to-Buy Planner</h1>
-
-        {notification.visible && (
-          <div className="fixed inset-0 flex items-center justify-center z-50">
-            <div className="bg-green-50 border border-green-400 text-green-800 rounded-xl p-4 shadow-lg flex flex-col items-center">
-              <span className="mb-2">{notification.message}</span>
-              <button
-                className="bg-green-500 hover:bg-green-600 text-white px-4 py-1 rounded-md transition"
-                onClick={() => setNotification(prev => ({ ...prev, visible: false }))}>
-                OK
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Start Date & Hourly Rate */}
-        <div className="flex flex-col md:flex-row gap-4 mb-6">
-          <div className="flex gap-2 items-center">
-            <label className="font-semibold text-gray-700">Start Date:</label>
-            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="border rounded-md p-1" />
-          </div>
-          <div className="flex gap-2 items-center">
-            <label className="font-semibold text-gray-700">Hourly Rate:</label>
-            <input type="number" value={hourlyRate} onChange={e => setHourlyRate(Number(e.target.value))} className="border rounded-md p-1 w-32" />
-          </div>
+    <div className={`big-container ${darkMode ? "dark" : "light"}`}>
+      <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div>
+          <h1 className="title-blob">Work-to-Buy Planner</h1>
+          <div style={{ fontSize: 12, color: "var(--muted)", marginTop: -8 }}>Plan hours to buy your items</div>
         </div>
 
-        {/* Item List */}
-        <h2 className="text-xl font-semibold mb-2 text-gray-800">Item List</h2>
-        <div className="grid grid-cols-6 gap-2 items-center mb-2 font-semibold text-gray-700">
-          <div className="flex justify-center">Enabled</div>
-          <div>Name</div>
-          <div>Price</div>
-          <div className="text-center">Taxable</div>
-          <div>Est. Tax</div>
-          <div>Remove</div>
-        </div>
-        <div className="grid grid-cols-6 gap-2 items-center mb-4">
-          {items.map(item => (
-            <React.Fragment key={item.id}>
-              <div className="flex justify-center items-center">
-                <input
-                  type="checkbox"
-                  checked={item.enabled ?? true}
-                  onChange={e =>
-                    setItems(items.map(i => i.id === item.id ? { ...i, enabled: e.target.checked } : i))
-                  }
-                  className="w-4 h-4"
-                />
-              </div>
-              <input
-                type="text"
-                value={item.name}
-                onChange={e =>
-                  setItems(items.map(i => i.id === item.id ? { ...i, name: e.target.value } : i))
-                }
-                className="border rounded-md p-1 w-full"
-              />
-              <input
-                type="number"
-                value={item.price}
-                onChange={e =>
-                  setItems(items.map(i => i.id === item.id ? { ...i, price: Number(e.target.value) } : i))
-                }
-                className="border rounded-md p-1 w-full"
-              />
-              <div className="flex justify-center items-center">
-                <input
-                  type="checkbox"
-                  checked={item.taxable ?? true}
-                  onChange={e =>
-                    setItems(items.map(i => i.id === item.id ? { ...i, taxable: e.target.checked } : i))
-                  }
-                  className="w-4 h-4"
-                />
-              </div>
-              <div className="text-sm font-medium">
-                {item.taxable ? `$${round2(item.price * (item.taxRate ?? 0.13))}` : "Tax-free"}
-              </div>
-              <button
-                onClick={() => removeItem(item.id)}
-                className="bg-red-500 hover:bg-red-600 text-white px-2 py-0.5 rounded text-sm w-12 transition"
-              >
-                X
-              </button>
-            </React.Fragment>
-          ))}
-          <button
-            onClick={addItem}
-            className="bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded col-span-6 mt-1 w-full transition"
-          >
-            Add Item
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button className="btn small" onClick={() => { setDarkMode(!darkMode); notify(darkMode ? "Light mode" : "Dark mode"); }}>
+            {darkMode ? "☀️ Light" : "🌙 Dark"}
           </button>
         </div>
-        <div className="mb-4 font-semibold text-gray-700">Total Item Tax: ${totalItemTax}</div>
+      </header>
 
-        {/* Estimates Div */}
-        <div className="bg-indigo-50 p-4 rounded-lg mb-6 text-gray-700 space-y-1">
-          <div>Estimated Hours Left: {estimatedHoursLeft}</div>
-          <div>Estimated Work Days Left: {estimatedDaysLeft}</div>
-          <div>Total Earned After Tax: ${totalEarned}</div>
-          <div>Total Item Price After Tax: ${totalAfterTaxItemPrice}</div>
+      {/* Information on top */}
+      <div className="card info-card">
+        <h2>Information</h2>
+        <div className="info-grid">
+          <div className="info-item">
+            <div className="label">Total Earned After Tax</div>
+            <div className="value">${totalEarnedAfterTax.toFixed(2)}</div>
+          </div>
+          <div className="info-item">
+            <div className="label">Total Item Price After Tax</div>
+            <div className="value">${totalAfterTaxItemPrice.toFixed(2)}</div>
+          </div>
+          <div className="info-item">
+            <div className="label">Total Item Tax</div>
+            <div className="value">${totalItemTax.toFixed(2)}</div>
+          </div>
         </div>
 
-        {/* Month Navigation */}
-        <div className="flex justify-between items-center mb-2">
-          <button onClick={prevMonth} className="bg-gray-300 hover:bg-gray-400 px-3 py-1 rounded transition">Prev Month</button>
-          <div className="font-bold text-lg">{currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}</div>
-          <button onClick={nextMonth} className="bg-gray-300 hover:bg-gray-400 px-3 py-1 rounded transition">Next Month</button>
+        <div className="progress-row">
+          <div className="progress-label">Total Progress</div>
+          <div className="progress-bar">
+            <div className="progress-fill" style={{ width: `${progressPct}%` }} />
+          </div>
+          <div className="progress-number">{progressPct.toFixed(2)}%</div>
+        </div>
+      </div>
+
+      {/* Controls (items & settings) */}
+      <div className="card controls">
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+          <div>
+            <label className="small-label">Hourly Rate</label>
+            <input className="control-input" type="number" value={hourlyRate} onChange={e => setHourlyRate(Number(e.target.value))} />
+          </div>
+
+          <div>
+            <label className="small-label">Start Date</label>
+            <input className="control-input" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+          </div>
+
+          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+            <button className="btn" onClick={() => setCurrentDate(new Date(year, month - 1, 1))}>Prev Month</button>
+            <div className="month-title">{currentDate.toLocaleString(undefined, { month: "long", year: "numeric" })}</div>
+            <button className="btn" onClick={() => setCurrentDate(new Date(year, month + 1, 1))}>Next Month</button>
+          </div>
         </div>
 
-        {/* Progress Bar */}
-        <div className="w-full bg-gray-200 rounded-full h-4 mb-4">
-          <div className="bg-indigo-500 h-4 rounded-full transition-all" style={{ width: `${totalProgress}%` }}></div>
+        <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+          <button className="btn primary" onClick={autoFillWeekdays}>Auto-fill Weekdays</button>
+          <button className="btn warn" onClick={resetMonthHours}>Reset Month Hours</button>
+          <button className="btn success" onClick={saveAll}>Save</button>
+          <button className="btn danger" onClick={clearAll}>Clear All</button>
+        </div>
+      </div>
+
+      {/* Items */}
+      <div className="card">
+        <h3>Item List</h3>
+        <div className="items-scroll">
+          <table className="items-table">
+            <thead>
+              <tr>
+                <th style={{ width: 36 }}></th>
+                <th>Name</th>
+                <th style={{ width: 120 }}>Price</th>
+                <th style={{ width: 100 }}>Taxable</th>
+                <th style={{ width: 90 }}>Remove</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(it => (
+                <tr key={it.id}>
+                  <td>
+                    <input type="checkbox" checked={it.enabled} onChange={e => handleItemChange(it.id, "enabled", e.target.checked)} />
+                  </td>
+                  <td><input className="item-name" value={it.name} onChange={e => handleItemChange(it.id, "name", e.target.value)} /></td>
+                  <td><input type="number" value={it.price} onChange={e => handleItemChange(it.id, "price", e.target.value)} /></td>
+                  <td><input type="checkbox" checked={it.taxable} onChange={e => handleItemChange(it.id, "taxable", e.target.checked)} /></td>
+                  <td><button className="btn sm danger" onClick={() => removeItem(it.id)}>✕</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ marginTop: 10 }}>
+          <button className="btn primary" onClick={addItem}>+ Add Item</button>
+        </div>
+      </div>
+
+      {/* Calendar */}
+      <div className="card">
+        <div className="cal-head grid-7">
+          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(d => <div key={d} className="cal-head-cell">{d}</div>)}
         </div>
 
-        {/* Calendar Grid */}
-        <div className="grid grid-cols-7 gap-1 mb-6 text-sm text-center border rounded-lg overflow-hidden">
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(d =>
-            <div key={d} className="bg-gray-200 font-semibold border-b p-1 sticky top-0 z-10">{d}</div>
-          )}
-          {calendarCells.map(cell => {
-            if (!cell.date) return <div key={cell.key} className="border p-2 bg-gray-50"></div>;
-            const dateStr = ymd(cell.date);
+        <div className="cal-grid grid-7">
+          {Array.from({ length: totalGrid }).map((_, idx) => {
+            const dayNum = idx - firstWeekday + 1;
+            const inMonth = dayNum >= 1 && dayNum <= daysInMonth;
+            if (!inMonth) return <div key={idx} className="cal-cell empty" />;
+            const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+            const rec = getDayRecord(dateStr);
             const isToday = dateStr === todayStr;
             const isStart = dateStr === startDate;
             return (
-              <div key={cell.key} className={`border p-1 h-28 flex flex-col justify-between text-xs transition
-                ${isStart ? "bg-green-200" : ""} ${isToday ? "bg-blue-200" : ""} hover:bg-indigo-50`}>
-                <div className="font-bold">{cell.date.getDate()}</div>
-                <input
-                  type="number"
-                  min={0} max={24}
-                  placeholder="" // keep empty by default
-                  value={cell.entry.hours > 0 ? cell.entry.hours : ""}
-                  onChange={e => updateDay(dateStr, Number(e.target.value))}
-                  className="border rounded p-0.5 text-center w-16 mx-auto text-xs"
-                />
-                <div className="text-xs">Earnings: ${cell.entry.earnings}</div>
+              <div key={idx} className={`cal-cell ${isToday ? "today" : ""} ${isStart ? "start" : ""}`}>
+                <div className="cal-daynum">{dayNum}</div>
+                <input className="cal-input" type="number" placeholder="hrs" value={rec?.hours ?? ""} onChange={e => handleHourInput(dateStr, e.target.value)} />
+                <div className="cal-earn">{rec?.earnings ? `$${rec.earnings.toFixed(2)}` : ""}</div>
               </div>
-            )
+            );
           })}
         </div>
+      </div>
 
-        {/* Details Table */}
-        <table className="w-full text-sm border-collapse mb-4">
-          <thead>
-            <tr className="bg-gray-200">
-              <th className="border px-2 py-1">Date</th>
-              <th className="border px-2 py-1">Hours</th>
-              <th className="border px-2 py-1">Earnings</th>
-              <th className="border px-2 py-1">Tax Paid</th>
-              <th className="border px-2 py-1">% of Total Items</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tableData.map(row => (
-              <tr key={row.date}>
-                <td className="border px-2 py-1">{row.date}</td>
-                <td className="border px-2 py-1">{row.hours}</td>
-                <td className="border px-2 py-1">${row.earnings}</td>
-                <td className="border px-2 py-1">${row.tax}</td>
-                <td className="border px-2 py-1">{row.cumulative}% (+{row.dayPercent}%)</td>
+      {/* Details */}
+      <div className="card">
+        <h3>Details</h3>
+        <div className="details-scroll">
+          <table className="details-table">
+            <thead>
+              <tr>
+                <th>Date</th><th>Hours</th><th>Earnings</th><th>Tax Paid</th><th>% of Total Items</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {/* Buttons */}
-        <div className="flex flex-wrap gap-2 mb-4">
-          <button onClick={saveAllInputs} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md transition">Save All</button>
-          <button onClick={clearAll} className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md transition">Clear All</button>
-        </div>
-
-        <div className="text-sm text-center text-gray-500 mt-4">
-          This website is generated by AI, actual results may vary.
+            </thead>
+            <tbody>
+              {detailedHistory.map(h => {
+                const pct = totalAfterTaxItemPrice > 0 ? round2((h.earnings - h.taxPaid) / totalAfterTaxItemPrice * 100) : 0;
+                return (
+                  <tr key={h.date}>
+                    <td>{h.date}</td>
+                    <td>{h.hours ?? ""}</td>
+                    <td>${h.earnings.toFixed(2)}</td>
+                    <td>${h.taxPaid.toFixed(2)}</td>
+                    <td>{pct.toFixed(2)}%</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
+
+      {/* Footer actions */}
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+        <button className="btn" onClick={() => saveAll()}>Quick Save</button>
+      </div>
+
+      {/* notification */}
+      {notification && <div className="notification" role="status" onClick={() => setNotification("")}>{notification}</div>}
+
+      {/* confirm clear */}
+      {confirmClear && (
+        <div className="modal-backdrop" onClick={() => setConfirmClear(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-msg">Clear ALL data (items, hours, settings)?</div>
+            <div className="modal-actions">
+              <button className="btn" onClick={() => setConfirmClear(false)}>Cancel</button>
+              <button className="btn danger" onClick={confirmClearNow}>OK</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <p className="disclaimer">This website is generated by AI, actual results may vary.</p>
     </div>
   );
 }
