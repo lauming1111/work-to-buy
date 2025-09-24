@@ -489,10 +489,10 @@ export default function App(): JSX.Element {
 
       {/* Export / Import / Save / Clear */}
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap" }}>
-        <button className="btn primary" onClick={exportData}>Export JSON</button>
+        <button className="btn primary" onClick={exportData}>Export Data</button>
 
         <label className="btn primary">
-          Import JSON
+          Import Data
           <input type="file" accept="application/json" onChange={handleImportFile} style={{ display: "none" }} />
         </label>
 

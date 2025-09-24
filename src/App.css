@@ -159,8 +159,21 @@
 }
 
 /* calendar grid */
-.calendar-header { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }
-.calendar-header .month-title { font-weight:700; font-size:1.05rem; text-align:center; flex:1 }
+.calendar-header { 
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 18px; /* Add space above the calendar header */
+}
+.calendar-header .month-title { 
+  flex: none;
+  margin: 0 auto;
+  text-align: center;
+  width: 100%;
+  margin-top: 8px; /* Optional: extra space above the title itself */
+}
 
 .grid-7 { display:grid; grid-template-columns:repeat(7,1fr); gap:10px }
 .cal-head { margin-bottom:8px }
