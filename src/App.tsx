@@ -12,7 +12,9 @@ type Item = {
 
 type DayHours = {
   date: string; // "YYYY-MM-DD"
-  hours: number | null;
+  start?: string | null; // "HH:MM"
+  end?: string | null;   // "HH:MM"
+  hours?: number | null; // calculated, not user input
 };
 
 type DetailedDay = {
@@ -26,7 +28,7 @@ type DetailedDay = {
 /* -------------------- Constants -------------------- */
 const INCOME_TAX_RATE = 0.13;
 const WEEKLY_OT_THRESHOLD = 44;
-const BIWEEKLY_TAXFREE_THRESHOLD = 80;
+const BIWEEKLY_TAXFREE_THRESHOLD = 88;
 
 const defaultItems: Item[] = [
   { id: 1, name: "Rent", price: 0, taxable: false, enabled: true },
@@ -92,7 +94,7 @@ export default function App(): JSX.Element {
 
   /* ---------------- compute detailed days ---------------- */
   const detailedHistory = useMemo((): DetailedDay[] => {
-    const entries = dayHours.filter(d => d.hours !== null && !isNaN(d.hours!)) as { date: string; hours: number }[];
+    const entries = dayHours.filter(d => d.hours != null && !isNaN(d.hours!)) as { date: string; hours: number }[];
     if (entries.length === 0) return [];
 
     const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
@@ -192,6 +194,25 @@ export default function App(): JSX.Element {
     setDayHours(prev => {
       const other = prev.filter(p => p.date !== date);
       return [...other, { date, hours: n }];
+    });
+  };
+
+  const handleTimeInput = (date: string, field: "start" | "end", value: string) => {
+    setDayHours(prev => {
+      const other = prev.filter(p => p.date !== date);
+      const existing = prev.find(p => p.date === date) || { date, start: "", end: "" };
+      const updated = { ...existing, [field]: value };
+
+      let hours: number | null = null;
+      if (updated.start && updated.end) {
+        const [sh, sm] = updated.start.split(":").map(Number);
+        const [eh, em] = updated.end.split(":").map(Number);
+        const startMins = sh * 60 + sm;
+        const endMins = eh * 60 + em;
+        hours = (endMins - startMins) / 60;
+        if (hours < 0 || hours > 24) hours = null;
+      }
+      return [...other, { ...updated, hours }];
     });
   };
 
@@ -450,15 +471,43 @@ export default function App(): JSX.Element {
                 }}>
                   <div className="cal-daynum">{dayNum}</div>
 
+                  {/* New: Start/End time input */}
+                  <input
+                    className="cal-input"
+                    type="time"
+                    value={rawEntry?.start ?? ""}
+                    onChange={e => handleTimeInput(dateStr, "start", e.target.value)}
+                    placeholder="Start"
+                  />
+                  <input
+                    className="cal-input"
+                    type="time"
+                    value={rawEntry?.end ?? ""}
+                    onChange={e => handleTimeInput(dateStr, "end", e.target.value)}
+                    placeholder="End"
+                  />
+
+                  {/* Old: Direct hours input for backward compatibility */}
                   <input
                     className="cal-input"
                     type="number"
                     min={0}
                     max={24}
-                    placeholder="hrs"
-                    value={rawEntry?.hours ?? ""}
+                    step={0.25}
+                    value={
+                      // Only show if user hasn't used start/end time
+                      rawEntry?.hours != null && (!rawEntry?.start && !rawEntry?.end)
+                        ? rawEntry.hours
+                        : ""
+                    }
                     onChange={e => handleHourInput(dateStr, e.target.value)}
+                    placeholder="Hours"
                   />
+
+                  {/* Show calculated hours */}
+                  <div className="cal-hours">
+                    {rawEntry?.hours != null && !isNaN(rawEntry.hours) ? `${rawEntry.hours.toFixed(2)}h` : ""}
+                  </div>
 
                   {/* daily after-tax (if exists) */}
                   <div className="cal-earn">
