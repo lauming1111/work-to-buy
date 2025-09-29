@@ -94,7 +94,7 @@ export default function App(): JSX.Element {
 
   /* ---------------- compute detailed days ---------------- */
   const detailedHistory = useMemo((): DetailedDay[] => {
-    const entries = dayHours.filter(d => d.hours != null && !isNaN(d.hours!)) as { date: string; hours: number }[];
+    const entries = dayHours.filter(d => d.hours != null && !isNaN(d.hours!)) as { date: string; hours: number; }[];
     if (entries.length === 0) return [];
 
     const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
@@ -155,7 +155,7 @@ export default function App(): JSX.Element {
   // bi-weekly summary (hours / earnings / tax)
   const biWeeklySummary = useMemo(() => {
     // Group all entries by biWeekIndex
-    const map = new Map<number, { hours: number; earned: number; days: { date: string; hours: number; earnings: number }[] }>();
+    const map = new Map<number, { hours: number; earned: number; days: { date: string; hours: number; earnings: number; }[]; }>();
     detailedHistory.forEach(d => {
       const { biWeekIndex } = getIndexInfo(d.date);
       const cur = map.get(biWeekIndex) || { hours: 0, earned: 0, days: [] };
@@ -468,24 +468,45 @@ export default function App(): JSX.Element {
                 <div key={idx} className={`cal-cell ${isToday ? "today" : ""} ${isStart ? "start" : ""}`} style={{
                   background: bgColor,
                   border: isToday ? "2px solid #1976d2" : undefined,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  padding: 2,
+                  minWidth: 0,
                 }}>
                   <div className="cal-daynum">{dayNum}</div>
 
-                  {/* New: Start/End time input */}
-                  <input
-                    className="cal-input"
-                    type="time"
-                    value={rawEntry?.start ?? ""}
-                    onChange={e => handleTimeInput(dateStr, "start", e.target.value)}
-                    placeholder="Start"
-                  />
-                  <input
-                    className="cal-input"
-                    type="time"
-                    value={rawEntry?.end ?? ""}
-                    onChange={e => handleTimeInput(dateStr, "end", e.target.value)}
-                    placeholder="End"
-                  />
+                  {/* Start/End time input, larger for mobile */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2, width: "100%", alignItems: "center" }}>
+                    <input
+                      className="cal-input"
+                      type="time"
+                      style={{
+                        width: "100%",
+                        minWidth: 0,
+                        maxWidth: 110,
+                        fontSize: 16,
+                        boxSizing: "border-box",
+                      }}
+                      value={rawEntry?.start ?? ""}
+                      onChange={e => handleTimeInput(dateStr, "start", e.target.value)}
+                      placeholder="Start"
+                    />
+                    <input
+                      className="cal-input"
+                      type="time"
+                      style={{
+                        width: "100%",
+                        minWidth: 0,
+                        maxWidth: 110,
+                        fontSize: 16,
+                        boxSizing: "border-box",
+                      }}
+                      value={rawEntry?.end ?? ""}
+                      onChange={e => handleTimeInput(dateStr, "end", e.target.value)}
+                      placeholder="End"
+                    />
+                  </div>
 
                   {/* Old: Direct hours input for backward compatibility */}
                   <input
@@ -494,8 +515,14 @@ export default function App(): JSX.Element {
                     min={0}
                     max={24}
                     step={0.25}
+                    style={{
+                      width: "100%",
+                      maxWidth: 110,
+                      fontSize: 16,
+                      marginTop: 2,
+                      boxSizing: "border-box",
+                    }}
                     value={
-                      // Only show if user hasn't used start/end time
                       rawEntry?.hours != null && (!rawEntry?.start && !rawEntry?.end)
                         ? rawEntry.hours
                         : ""
@@ -505,14 +532,31 @@ export default function App(): JSX.Element {
                   />
 
                   {/* Show calculated hours */}
-                  <div className="cal-hours">
+                  <div className="cal-hours" style={{ fontSize: 13, marginTop: 2 }}>
                     {rawEntry?.hours != null && !isNaN(rawEntry.hours) ? `${rawEntry.hours.toFixed(2)}h` : ""}
                   </div>
 
                   {/* daily after-tax (if exists) */}
-                  <div className="cal-earn">
+                  <div className="cal-earn" style={{ fontSize: 13 }}>
                     {rec ? `$${rec.afterTax.toFixed(2)}` : ""}
                   </div>
+                  {/* Reset button for manual hours */}
+                  <button
+                    className="btn small"
+                    style={{
+                      marginBottom: 2,
+                      width: "100%",
+                      maxWidth: 110,
+                      fontSize: 12,
+                      padding: "2px 0",
+                      boxSizing: "border-box",
+                    }}
+                    onClick={() => handleHourInput(dateStr, "")}
+                    tabIndex={0}
+                    aria-label="Reset manual hours"
+                  >
+                    Reset Hours
+                  </button>
                 </div>
               );
             })}
@@ -577,7 +621,7 @@ export default function App(): JSX.Element {
               {detailedHistory.map(d => (
                 <tr key={d.date}>
                   <td>{d.date}</td>
-                  <td>{d.hours}</td>
+                  <td>{d.hours.toFixed(2)}</td>
                   <td>${d.earnings.toFixed(2)}</td>
                   <td>${d.afterTax.toFixed(2)}</td>
                 </tr>

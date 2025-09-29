@@ -422,3 +422,17 @@
     margin-bottom: 12px;
   }
 }
+
+@media (max-width: 600px) {
+  .calendar-card, .biweekly-card {
+    min-width: unset !important;
+    width: 100% !important;
+  }
+  .calendar-summary-wrap {
+    flex-direction: column !important;
+    gap: 0 !important;
+  }
+  .cal-grid {
+    font-size: 14px;
+  }
+}
