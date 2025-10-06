@@ -1,13 +1,13 @@
 {
   "files": {
-    "main.css": "/work-to-buy/static/css/main.77062e8a.css",
-    "main.js": "/work-to-buy/static/js/main.502382aa.js",
+    "main.css": "/work-to-buy/static/css/main.3d5a1962.css",
+    "main.js": "/work-to-buy/static/js/main.e64618b8.js",
     "index.html": "/work-to-buy/index.html",
-    "main.77062e8a.css.map": "/work-to-buy/static/css/main.77062e8a.css.map",
-    "main.502382aa.js.map": "/work-to-buy/static/js/main.502382aa.js.map"
+    "main.3d5a1962.css.map": "/work-to-buy/static/css/main.3d5a1962.css.map",
+    "main.e64618b8.js.map": "/work-to-buy/static/js/main.e64618b8.js.map"
   },
   "entrypoints": [
-    "static/css/main.77062e8a.css",
-    "static/js/main.502382aa.js"
+    "static/css/main.3d5a1962.css",
+    "static/js/main.e64618b8.js"
   ]
 }
