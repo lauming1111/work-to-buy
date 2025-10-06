@@ -490,7 +490,7 @@ export default function App(): JSX.Element {
                       }}
                       value={rawEntry?.start ?? ""}
                       onChange={e => handleTimeInput(dateStr, "start", e.target.value)}
-                      placeholder="Start"
+                      step={60} // minute precision, ensures 24-hour format
                     />
                     <input
                       className="cal-input"
@@ -504,7 +504,7 @@ export default function App(): JSX.Element {
                       }}
                       value={rawEntry?.end ?? ""}
                       onChange={e => handleTimeInput(dateStr, "end", e.target.value)}
-                      placeholder="End"
+                      step={60} // minute precision, ensures 24-hour format
                     />
                   </div>
 
