@@ -585,7 +585,7 @@ export default function App(): JSX.Element {
                     style={{
                       width: "100%",
                       maxWidth: 110,
-                      fontSize: 16,
+                      fontSize: 18, // slightly larger for visibility
                       marginTop: 2,
                       boxSizing: "border-box",
                     }}
@@ -734,4 +734,75 @@ function getTorontoToday(): Date {
   const torontoParts = now.toLocaleDateString("en-CA", { timeZone: "America/Toronto" }).split("-");
   // Build a Date object for midnight Toronto time
   return new Date(`${torontoParts[0]}-${torontoParts[1]}-${torontoParts[2]}T00:00:00-04:00`);
+}
+
+function CustomTimeInput({
+  value,
+  onChange,
+  label,
+}: {
+  value: string | null | undefined;
+  onChange: (val: string) => void;
+  label: string;
+}) {
+  const [hour, setHour] = useState<string>(() => value?.split(":")[0] ?? "");
+  const [minute, setMinute] = useState<string>(() => value?.split(":")[1] ?? "");
+
+  useEffect(() => {
+    if (value) {
+      const [h, m] = value.split(":");
+      setHour(h);
+      setMinute(m);
+    }
+  }, [value]);
+
+  const handleHour = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let h = e.target.value.replace(/\D/g, "");
+    if (h.length > 2) h = h.slice(0, 2);
+    if (h && (+h < 0 || +h > 23)) return;
+    setHour(h);
+    // Only pad when saving to state, not when typing
+    if (minute !== "") {
+      onChange(`${h.padStart(2, "0")}:${minute.padStart(2, "0")}`);
+    } else {
+      onChange("");
+    }
+  };
+
+  const handleMinute = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let m = e.target.value.replace(/\D/g, "");
+    if (m.length > 2) m = m.slice(0, 2);
+    if (m && (+m < 0 || +m > 59)) return;
+    setMinute(m);
+    // Only pad when saving to state, not when typing
+    if (hour !== "") {
+      onChange(`${hour.padStart(2, "0")}:${m.padStart(2, "0")}`);
+    } else {
+      onChange("");
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+      <input
+        type="number"
+        min={0}
+        max={23}
+        value={hour}
+        onChange={handleHour}
+        placeholder={label ? `${label} HH` : "HH"}
+        style={{ width: 40, fontSize: 16 }}
+      />
+      :
+      <input
+        type="number"
+        min={0}
+        max={59}
+        value={minute}
+        onChange={handleMinute}
+        placeholder="MM"
+        style={{ width: 40, fontSize: 16 }}
+      />
+    </div>
+  );
 }
