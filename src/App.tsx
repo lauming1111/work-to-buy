@@ -492,56 +492,74 @@ export default function App(): JSX.Element {
                   <div className="cal-daynum">{dayNum}</div>
 
                   {/* Lunch checkbox: top right corner */}
-                  <input
-                    type="checkbox"
-                    checked={rawEntry?.lunch ?? true}
+                  <div
                     style={{
                       position: "absolute",
                       top: 2,
                       right: 2,
-                      width: 18,
-                      height: 18,
                       zIndex: 2,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "flex-end",
                     }}
-                    title="Check to reduce 30 mins for lunch"
-                    onChange={e => {
-                      const lunchChecked = e.target.checked;
-                      setDayHours(prev => {
-                        const other = prev.filter(p => p.date !== dateStr);
-                        const existing = prev.find(p => p.date === dateStr) || { date: dateStr, lunch: true };
-                        let updated = { ...existing, lunch: lunchChecked };
+                  >
+                    <input
+                      type="checkbox"
+                      checked={rawEntry?.lunch ?? true}
+                      style={{
+                        width: 18,
+                        height: 18,
+                      }}
+                      title="Subtract 30 min for lunch"
+                      onChange={e => {
+                        const lunchChecked = e.target.checked;
+                        setDayHours(prev => {
+                          const other = prev.filter(p => p.date !== dateStr);
+                          const existing = prev.find(p => p.date === dateStr) || { date: dateStr, lunch: true };
+                          let updated = { ...existing, lunch: lunchChecked };
 
-                        // If using manual hours
-                        if (updated.hours != null && (!updated.start && !updated.end)) {
-                          let baseHours = Number(existing.hours ?? updated.hours);
-                          if (lunchChecked) {
-                            updated.hours = Math.max(0, baseHours - 0.5);
-                          } else {
-                            updated.hours = baseHours + (existing.lunch ? 0.5 : 0);
+                          // Only update hours, do not change start/end input values
+                          if (updated.start && updated.end) {
+                            const [sh, sm] = updated.start.split(":").map(Number);
+                            const [eh, em] = updated.end.split(":").map(Number);
+                            const startMins = sh * 60 + sm;
+                            let endMins = eh * 60 + em;
+                            let hours = (endMins - startMins) / 60;
+                            if (lunchChecked) hours -= 0.5;
+                            updated.hours = hours >= 0 && hours <= 24 ? hours : null;
+                          } else if (updated.hours != null && (!updated.start && !updated.end)) {
+                            let baseHours = Number(existing.hours ?? updated.hours);
+                            updated.hours = lunchChecked ? Math.max(0, baseHours - 0.5) : baseHours;
                           }
-                        }
 
-                        // If using time input
-                        if (updated.start && updated.end) {
-                          const [sh, sm] = updated.start.split(":").map(Number);
-                          let [eh, em] = updated.end.split(":").map(Number);
-                          let startMins = sh * 60 + sm;
-                          let endMins = eh * 60 + em;
-                          if (lunchChecked) {
-                            endMins = Math.max(startMins, endMins - 30);
-                          } else if (existing.lunch) {
-                            endMins = Math.min(startMins + 24 * 60, endMins + 30);
-                          }
-                          eh = Math.floor(endMins / 60);
-                          em = endMins % 60;
-                          updated.end = `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`;
-                          updated.hours = (endMins - startMins) / 60;
-                        }
-
-                        return [...other, updated];
-                      });
-                    }}
-                  />
+                          return [...other, updated];
+                        });
+                      }}
+                    />
+                    <span
+                      style={{
+                        fontSize: 10,
+                        color: "#888",
+                        maxWidth: 90,
+                        textAlign: "right",
+                        lineHeight: 1.2,
+                        marginTop: 2,
+                        visibility: "hidden",
+                        background: "#fffbe8",
+                        border: "1px solid #eee",
+                        borderRadius: 3,
+                        padding: "2px 6px",
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                        position: "absolute",
+                        right: 0,
+                        top: 22,
+                        zIndex: 10,
+                      }}
+                      className="lunch-comment"
+                    >
+                      Subtract 30 min for lunch
+                    </span>
+                  </div>
 
                   {/* Start/End time input, larger for mobile */}
                   <div style={{ display: "flex", flexDirection: "column", gap: 2, width: "100%", alignItems: "center" }}>

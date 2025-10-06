@@ -436,3 +436,11 @@
     font-size: 14px;
   }
 }
+
+.lunch-comment {
+  transition: visibility 0.2s;
+}
+
+.cal-cell:hover .lunch-comment {
+  visibility: visible;
+}
