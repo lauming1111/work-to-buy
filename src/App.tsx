@@ -16,6 +16,7 @@ type DayHours = {
   end?: string | null;   // "HH:MM"
   hours?: number | null; // calculated, not user input
   lunch?: boolean;       // lunch checkbox state, default true
+  originalHours?: number | null; // <-- add this line
 };
 
 type DetailedDay = {
@@ -195,8 +196,9 @@ export default function App(): JSX.Element {
     setDayHours(prev => {
       const other = prev.filter(p => p.date !== date);
       const existing = prev.find(p => p.date === date);
-      // If lunch is true, subtract 0.5 hour
       const lunch = existing?.lunch ?? true;
+      // Always store the original entered hours
+      const originalHours = n;
       const hours = lunch ? Math.max(0, n - 0.5) : n;
       return [
         ...other,
@@ -204,6 +206,7 @@ export default function App(): JSX.Element {
           date,
           hours,
           lunch,
+          originalHours,
         },
       ];
     });
@@ -516,9 +519,15 @@ export default function App(): JSX.Element {
                         setDayHours(prev => {
                           const other = prev.filter(p => p.date !== dateStr);
                           const existing = prev.find(p => p.date === dateStr) || { date: dateStr, lunch: true };
-                          let updated = { ...existing, lunch: lunchChecked };
+                          // Always keep the original entered hours in a new field
+                          let originalHours = existing.originalHours ?? existing.hours ?? null;
+                          // If user just entered hours, update originalHours
+                          if (existing.hours != null && existing.originalHours == null) {
+                            originalHours = existing.hours;
+                          }
+                          let updated: DayHours = { ...existing, lunch: lunchChecked, originalHours };
 
-                          // Only update hours, do not change start/end input values
+                          // Only update displayed hours, do not change start/end input values
                           if (updated.start && updated.end) {
                             const [sh, sm] = updated.start.split(":").map(Number);
                             const [eh, em] = updated.end.split(":").map(Number);
@@ -527,9 +536,8 @@ export default function App(): JSX.Element {
                             let hours = (endMins - startMins) / 60;
                             if (lunchChecked) hours -= 0.5;
                             updated.hours = hours >= 0 && hours <= 24 ? hours : null;
-                          } else if (updated.hours != null && (!updated.start && !updated.end)) {
-                            let baseHours = Number(existing.hours ?? updated.hours);
-                            updated.hours = lunchChecked ? Math.max(0, baseHours - 0.5) : baseHours;
+                          } else if (originalHours != null && (!updated.start && !updated.end)) {
+                            updated.hours = lunchChecked ? Math.max(0, originalHours - 0.5) : originalHours;
                           }
 
                           return [...other, updated];
