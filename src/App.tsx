@@ -15,6 +15,7 @@ type DayHours = {
   start?: string | null; // "HH:MM"
   end?: string | null;   // "HH:MM"
   hours?: number | null; // calculated, not user input
+  lunch?: boolean;       // lunch checkbox state, default true
 };
 
 type DetailedDay = {
@@ -193,7 +194,18 @@ export default function App(): JSX.Element {
     }
     setDayHours(prev => {
       const other = prev.filter(p => p.date !== date);
-      return [...other, { date, hours: n }];
+      const existing = prev.find(p => p.date === date);
+      // If lunch is true, subtract 0.5 hour
+      const lunch = existing?.lunch ?? true;
+      const hours = lunch ? Math.max(0, n - 0.5) : n;
+      return [
+        ...other,
+        {
+          date,
+          hours,
+          lunch,
+        },
+      ];
     });
   };
 
@@ -201,14 +213,16 @@ export default function App(): JSX.Element {
     setDayHours(prev => {
       const other = prev.filter(p => p.date !== date);
       const existing = prev.find(p => p.date === date) || { date, start: "", end: "" };
-      const updated = { ...existing, [field]: value };
+      const lunch = existing.lunch ?? true;
+      const updated = { ...existing, [field]: value, lunch };
 
       let hours: number | null = null;
       if (updated.start && updated.end) {
         const [sh, sm] = updated.start.split(":").map(Number);
         const [eh, em] = updated.end.split(":").map(Number);
         const startMins = sh * 60 + sm;
-        const endMins = eh * 60 + em;
+        let endMins = eh * 60 + em;
+        if (lunch) endMins -= 30; // subtract 30 mins if lunch is true
         hours = (endMins - startMins) / 60;
         if (hours < 0 || hours > 24) hours = null;
       }
@@ -473,8 +487,61 @@ export default function App(): JSX.Element {
                   alignItems: "center",
                   padding: 2,
                   minWidth: 0,
+                  position: "relative", // Needed for absolute lunch checkbox
                 }}>
                   <div className="cal-daynum">{dayNum}</div>
+
+                  {/* Lunch checkbox: top right corner */}
+                  <input
+                    type="checkbox"
+                    checked={rawEntry?.lunch ?? true}
+                    style={{
+                      position: "absolute",
+                      top: 2,
+                      right: 2,
+                      width: 18,
+                      height: 18,
+                      zIndex: 2,
+                    }}
+                    title="Check to reduce 30 mins for lunch"
+                    onChange={e => {
+                      const lunchChecked = e.target.checked;
+                      setDayHours(prev => {
+                        const other = prev.filter(p => p.date !== dateStr);
+                        const existing = prev.find(p => p.date === dateStr) || { date: dateStr, lunch: true };
+                        let updated = { ...existing, lunch: lunchChecked };
+
+                        // If using manual hours
+                        if (updated.hours != null && (!updated.start && !updated.end)) {
+                          let baseHours = Number(existing.hours ?? updated.hours);
+                          if (lunchChecked) {
+                            updated.hours = Math.max(0, baseHours - 0.5);
+                          } else {
+                            updated.hours = baseHours + (existing.lunch ? 0.5 : 0);
+                          }
+                        }
+
+                        // If using time input
+                        if (updated.start && updated.end) {
+                          const [sh, sm] = updated.start.split(":").map(Number);
+                          let [eh, em] = updated.end.split(":").map(Number);
+                          let startMins = sh * 60 + sm;
+                          let endMins = eh * 60 + em;
+                          if (lunchChecked) {
+                            endMins = Math.max(startMins, endMins - 30);
+                          } else if (existing.lunch) {
+                            endMins = Math.min(startMins + 24 * 60, endMins + 30);
+                          }
+                          eh = Math.floor(endMins / 60);
+                          em = endMins % 60;
+                          updated.end = `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`;
+                          updated.hours = (endMins - startMins) / 60;
+                        }
+
+                        return [...other, updated];
+                      });
+                    }}
+                  />
 
                   {/* Start/End time input, larger for mobile */}
                   <div style={{ display: "flex", flexDirection: "column", gap: 2, width: "100%", alignItems: "center" }}>
@@ -490,7 +557,7 @@ export default function App(): JSX.Element {
                       }}
                       value={rawEntry?.start ?? ""}
                       onChange={e => handleTimeInput(dateStr, "start", e.target.value)}
-                      step={60} // minute precision, ensures 24-hour format
+                      step={60}
                     />
                     <input
                       className="cal-input"
@@ -504,7 +571,7 @@ export default function App(): JSX.Element {
                       }}
                       value={rawEntry?.end ?? ""}
                       onChange={e => handleTimeInput(dateStr, "end", e.target.value)}
-                      step={60} // minute precision, ensures 24-hour format
+                      step={60}
                     />
                   </div>
 
