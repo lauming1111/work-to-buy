@@ -223,7 +223,7 @@ export default function App(): JSX.Element {
       const other = prev.filter(p => p.date !== date);
       const existing = prev.find(p => p.date === date) || { date, start: "", end: "" };
       const lunch = existing.lunch ?? true;
-      const updated = { ...existing, [field]: value.format("HH:mm"), lunch };
+      const updated = { ...existing, [field]: value?.format("HH:mm"), lunch };
 
       let hours: number | null = null;
       if (updated.start && updated.end) {
