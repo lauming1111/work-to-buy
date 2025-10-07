@@ -580,14 +580,17 @@ export default function App(): JSX.Element {
                     {/* {JSON.stringify(rawEntry)} */}
                     <TimePicker
                       className="cal-input"
-                      value={rawEntry?.start ? dayjs(rawEntry?.start, 'HH:mm') : null}
+                      value={rawEntry?.start ? dayjs(rawEntry?.start, 'HH:mm') : undefined}
                       onChange={e => handleTimeInput(dateStr, "start", e)}
-                      defaultOpenValue={dayjs('00:00', 'HH:mm')} format={'HH:mm'} />
+                      defaultOpenValue={dayjs('00:00', 'HH:mm')} format={'HH:mm'}
+                      needConfirm={true}
+                    />
                     <TimePicker
                       className="cal-input"
-                      value={rawEntry?.end ? dayjs(rawEntry?.end, 'HH:mm') : null}
-                      onChange={e => handleTimeInput(dateStr, "start", e)}
-                      defaultOpenValue={dayjs('00:00', 'HH:mm')} format={'HH:mm'} />
+                      value={rawEntry?.end ? dayjs(rawEntry?.end, 'HH:mm') : undefined}
+                      onChange={e => handleTimeInput(dateStr, "end", e)}
+                      defaultOpenValue={dayjs('00:00', 'HH:mm')} format={'HH:mm'}
+                      needConfirm={true} />
                     {/* <input
                       className="cal-input"
                       type="time"
