@@ -1,6 +1,10 @@
 import React, { JSX, useEffect, useMemo, useState } from "react";
 import "./App.css";
+import dayjs, { Dayjs } from 'dayjs';
+import customParseFormat from 'dayjs/plugin/customParseFormat'
+import { TimePicker } from "antd";
 
+dayjs.extend(customParseFormat)
 /* ---------------------- Types ---------------------- */
 type Item = {
   id: number;
@@ -212,12 +216,14 @@ export default function App(): JSX.Element {
     });
   };
 
-  const handleTimeInput = (date: string, field: "start" | "end", value: string) => {
+  const handleTimeInput = (date: string, field: "start" | "end", value: any) => {
+    // console.log(typeof (value), value.format("HH:mm"));
+
     setDayHours(prev => {
       const other = prev.filter(p => p.date !== date);
       const existing = prev.find(p => p.date === date) || { date, start: "", end: "" };
       const lunch = existing.lunch ?? true;
-      const updated = { ...existing, [field]: value, lunch };
+      const updated = { ...existing, [field]: value.format("HH:mm"), lunch };
 
       let hours: number | null = null;
       if (updated.start && updated.end) {
@@ -571,7 +577,18 @@ export default function App(): JSX.Element {
 
                   {/* Start/End time input, larger for mobile */}
                   <div style={{ display: "flex", flexDirection: "column", gap: 2, width: "100%", alignItems: "center" }}>
-                    <input
+                    {/* {JSON.stringify(rawEntry)} */}
+                    <TimePicker
+                      className="cal-input"
+                      value={rawEntry?.start ? dayjs(rawEntry?.start, 'HH:mm') : null}
+                      onChange={e => handleTimeInput(dateStr, "start", e)}
+                      defaultOpenValue={dayjs('00:00', 'HH:mm')} format={'HH:mm'} />
+                    <TimePicker
+                      className="cal-input"
+                      value={rawEntry?.end ? dayjs(rawEntry?.end, 'HH:mm') : null}
+                      onChange={e => handleTimeInput(dateStr, "start", e)}
+                      defaultOpenValue={dayjs('00:00', 'HH:mm')} format={'HH:mm'} />
+                    {/* <input
                       className="cal-input"
                       type="time"
                       style={{
@@ -598,7 +615,7 @@ export default function App(): JSX.Element {
                       value={rawEntry?.end ?? ""}
                       onChange={e => handleTimeInput(dateStr, "end", e.target.value)}
                       step={60}
-                    />
+                    /> */}
                   </div>
 
                   {/* Old: Direct hours input for backward compatibility */}
