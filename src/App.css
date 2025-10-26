@@ -16,7 +16,7 @@
   font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
   margin: 18px auto;
   max-width: 1200px;
-  padding: 18px;
+  padding: 5px;
   border-radius: 14px;
   transition: background 0.25s, color 0.25s, border 0.25s;
   display: flex;
@@ -437,10 +437,166 @@
   }
 }
 
+/* --- Add or update these rules --- */
+
+/* On small screens, make the calendar grid fit the screen width */
+@media (max-width: 600px) {
+  .cal-grid,
+  .cal-head {
+    min-width: 0 !important;
+    width: 100% !important;
+    font-size: 13px;
+  }
+  .cal-grid {
+    grid-template-columns: repeat(7, 1fr) !important;
+    width: 100% !important;
+  }
+  .cal-cell,
+  .cal-head-cell {
+    min-width: 0 !important;
+    max-width: unset !important;
+    font-size: 13px;
+    padding: 4px 1px;
+    box-sizing: border-box;
+  }
+  .calendar-card {
+    min-width: 0 !important;
+    width: 100% !important;
+    overflow-x: visible !important;
+  }
+  .calendar-scroll-wrap {
+    overflow-x: visible !important;
+    width: 100% !important;
+  }
+}
+
+/* Optionally, make inputs smaller on mobile */
+@media (max-width: 600px) {
+  .cal-input {
+    font-size: 13px;
+    padding: 4px 2px;
+    width: 100%;
+    min-width: 0;
+    max-width: unset;
+  }
+}
+
+/* --- Add or update these rules for mobile item list --- */
+@media (max-width: 600px) {
+  .items-table th,
+  .items-table td {
+    padding: 4px 2px;
+    font-size: 13px;
+  }
+  .items-table input[type="text"],
+  .items-table input[type="number"] {
+    font-size: 13px;
+    width: 60px !important;
+    min-width: 0 !important;
+    max-width: 80px !important;
+    padding: 3px 2px;
+  }
+  .items-table input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+  }
+  .item-name {
+    width: 80px !important;
+    min-width: 0 !important;
+    max-width: 120px !important;
+  }
+  .items-table th[style*="width: 140px"],
+  .items-table td[style*="width: 140px"] {
+    width: 70px !important;
+    min-width: 0 !important;
+    max-width: 80px !important;
+  }
+  .items-table th[style*="width: 120px"],
+  .items-table td[style*="width: 120px"] {
+    width: 50px !important;
+    min-width: 0 !important;
+    max-width: 60px !important;
+  }
+  .items-table th[style*="width: 80px"],
+  .items-table td[style*="width: 80px"] {
+    width: 40px !important;
+    min-width: 0 !important;
+    max-width: 50px !important;
+  }
+  .items-scroll {
+    overflow-x: auto;
+    width: 100%;
+  }
+}
+
 .lunch-comment {
   transition: visibility 0.2s;
 }
 
 .cal-cell:hover .lunch-comment {
   visibility: visible;
+}
+
+/* Add this at the very end of your CSS file: */
+body,
+html {
+  background: #f7f8fa; /* default light background */
+  transition: background 0.25s;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  width: 100vw;
+  box-sizing: border-box;
+}
+
+body.dark,
+html.dark {
+  background: #000 !important;
+}
+
+/* Make calendar header responsive and prevent overflow */
+.calendar-header {
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.calendar-header > div {
+  flex-wrap: wrap;
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  justify-content: center;
+  align-items: center;
+}
+
+.month-title {
+  font-size: 1.1em;
+  font-weight: bold;
+  white-space: nowrap;
+  text-align: center;
+  flex: 1 1 auto;
+  min-width: 80px;
+}
+
+/* On small screens, stack or shrink buttons and title */
+@media (max-width: 600px) {
+  .calendar-header {
+    padding: 2px 0;
+  }
+  .calendar-header > div {
+    gap: 4px;
+  }
+  .month-title {
+    font-size: 1em;
+    min-width: 60px;
+  }
+  .btn.small {
+    font-size: 13px;
+    padding: 2px 6px;
+  }
 }
