@@ -28,14 +28,18 @@ type DetailedDay = {
   date: string;
   hours: number;
   earnings: number; // gross
-  taxPaid: number;
+  incomeTax: number;
+  employeeInsurance: number;
+  cpp: number;
   afterTax: number;
 };
 
 /* -------------------- Constants -------------------- */
-const INCOME_TAX_RATE = 0.13;
-const WEEKLY_OT_THRESHOLD = 44;
+const INCOME_TAX_RATE = 0.117;
+const EMPLOYEE_INSURANCE_RATE = 0.0164;
+const CPP_RATE = 0.05482;
 const BIWEEKLY_TAXFREE_THRESHOLD = 88;
+const BIWEEKLY_BONUS_RATE = 0.08; // 8% bonus per cycle
 
 const defaultItems: Item[] = [
   { id: 1, name: "Rent", price: 0, taxable: false, enabled: true },
@@ -129,7 +133,7 @@ export default function App(): JSX.Element {
     for (const r of sorted) {
       const h = r.hours || 0;
       if (h <= 0) {
-        results.push({ date: r.date, hours: 0, earnings: 0, taxPaid: 0, afterTax: 0 });
+        results.push({ date: r.date, hours: 0, earnings: 0, incomeTax: 0, employeeInsurance: 0, cpp: 0, afterTax: 0 });
         continue;
       }
 
@@ -144,17 +148,26 @@ export default function App(): JSX.Element {
         dayTaxFree = Math.min(dayTaxFree, h);
       }
 
-      const earnings = h * hourlyRate;
+      // 8% bonus for all hours in this bi-week
+      const bonusMultiplier = 1 + BIWEEKLY_BONUS_RATE;
+      const earnings = h * hourlyRate * bonusMultiplier;
+
       const taxableHours = Math.max(0, h - dayTaxFree);
-      const taxableEarnings = taxableHours * hourlyRate;
-      const taxPaid = round2(taxableEarnings * INCOME_TAX_RATE);
-      const afterTax = round2(earnings - taxPaid);
+      const taxableEarnings = taxableHours * hourlyRate * bonusMultiplier;
+
+      const incomeTax = round2(taxableEarnings * INCOME_TAX_RATE);
+      const employeeInsurance = round2(taxableEarnings * EMPLOYEE_INSURANCE_RATE);
+      const cpp = round2(taxableEarnings * CPP_RATE);
+
+      const afterTax = round2(earnings - incomeTax - employeeInsurance - cpp);
 
       results.push({
         date: r.date,
         hours: h,
         earnings: round2(earnings),
-        taxPaid,
+        incomeTax,
+        employeeInsurance,
+        cpp,
         afterTax,
       });
     }
@@ -182,19 +195,12 @@ export default function App(): JSX.Element {
       map.set(biWeekIndex, cur);
     });
 
-    // Calculate tax for each period as a whole
-    return Array.from(map.entries()).map(([idx, val]) => {
-      // Cap taxable hours at BIWEEKLY_TAXFREE_THRESHOLD
-      const taxableHours = Math.min(val.hours, BIWEEKLY_TAXFREE_THRESHOLD);
-      const taxableEarnings = taxableHours * hourlyRate;
-      const tax = round2(taxableEarnings * INCOME_TAX_RATE);
-      return {
-        index: idx + 1,
-        hours: val.hours,
-        earned: val.earned,
-        tax,
-      };
-    });
+    return Array.from(map.entries()).map(([idx, val]) => ({
+      index: idx + 1,
+      hours: val.hours,
+      earned: val.earned,
+      days: val.days,
+    }));
   }, [detailedHistory, hourlyRate, startDate]);
 
   /* ---------------- UI helpers ---------------- */
@@ -686,24 +692,73 @@ export default function App(): JSX.Element {
           </div>
         </div>
 
-        <div className="card biweekly-card" style={{ width: 320, minWidth: 220 }}>
+        <div className="card biweekly-card" style={{ width: "100%", minWidth: 220, marginTop: 16 }}>
           <h3>Bi-weekly Summary</h3>
           <table className="items-table">
             <thead>
               <tr>
-                <th>Period</th><th>Hours</th><th>Earnings</th><th>Tax</th>
+                <th>Period</th>
+                <th>Hrs</th>
+                <th>Period Date</th>
+                <th>Earnings ({"<="}88)</th>
+                <th>Earnings ({">"}88)</th>
+                <th>Income Tax</th>
+                <th>EI</th>
+                <th>CPP</th>
+                <th>Net ({"<"}88)</th>
+                <th>Take-Home Pay</th>
               </tr>
             </thead>
             <tbody>
-              {biWeeklySummary.length === 0 && <tr><td colSpan={4} style={{ textAlign: "center" }}>No data</td></tr>}
-              {biWeeklySummary.map(b => (
-                <tr key={b.index}>
-                  <td>{b.index}</td>
-                  <td>{round2(b.hours)}</td>
-                  <td>${round2(b.earned).toFixed(2)}</td>
-                  <td>${round2(b.tax).toFixed(2)}</td>
-                </tr>
-              ))}
+              {biWeeklySummary.length === 0 && <tr><td colSpan={10} style={{ textAlign: "center" }}>No data</td></tr>}
+              {biWeeklySummary.map((b, i) => {
+                const periodDays = b.days || [];
+                const periodDates = periodDays.length > 0 ? `${periodDays[0].date} ~ ${periodDays[periodDays.length - 1].date}` : "";
+                const periodDetails = detailedHistory.filter(d => periodDays.some(day => day.date === d.date));
+                const hours = periodDetails.reduce((sum, d) => sum + d.hours, 0);
+
+                // Calculate first 88 hours earnings (+8%) and after deduction
+                let taxedHours = 0;
+                let earnings88 = 0;
+                let cashEarnings = 0;
+                for (const d of periodDetails) {
+                  const h = d.hours;
+                  const bonusMultiplier = 1 + BIWEEKLY_BONUS_RATE;
+                  const taxedLeft = Math.max(0, BIWEEKLY_TAXFREE_THRESHOLD - taxedHours);
+                  const thisTaxed = Math.min(h, taxedLeft);
+                  const thisCash = h - thisTaxed;
+                  taxedHours += thisTaxed;
+                  earnings88 += thisTaxed * hourlyRate * bonusMultiplier;
+                  cashEarnings += thisCash * hourlyRate * bonusMultiplier;
+                }
+                const totalIncome = earnings88 + cashEarnings;
+
+                // Deductions for first 88 hours only
+                const incomeTax88 = round2(earnings88 * INCOME_TAX_RATE);
+                const employeeInsurance88 = round2(earnings88 * EMPLOYEE_INSURANCE_RATE);
+                const cpp88 = round2(earnings88 * CPP_RATE);
+                const afterTax88 = round2(earnings88 - incomeTax88 - employeeInsurance88 - cpp88);
+
+                // Deductions for all hours (for display)
+                const incomeTax = periodDetails.reduce((sum, d) => sum + d.incomeTax, 0);
+                const employeeInsurance = periodDetails.reduce((sum, d) => sum + d.employeeInsurance, 0);
+                const cpp = periodDetails.reduce((sum, d) => sum + d.cpp, 0);
+
+                return (
+                  <tr key={b.index}>
+                    <td>{b.index}</td>
+                    <td>{round2(hours)}</td>
+                    <td>{periodDates}</td>
+                    <td>${round2(earnings88).toFixed(2)}</td>
+                    <td>${round2(cashEarnings).toFixed(2)}</td>
+                    <td>${round2(incomeTax88).toFixed(2)}</td>
+                    <td>${round2(employeeInsurance88).toFixed(2)}</td>
+                    <td>${round2(cpp88).toFixed(2)}</td>
+                    <td>${round2(afterTax88).toFixed(2)}</td> {/* Expected Take-Home Pay */}
+                    <td>${round2(afterTax88 + cashEarnings).toFixed(2)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -732,13 +787,16 @@ export default function App(): JSX.Element {
                 <th>Date</th>
                 <th>Hours</th>
                 <th>Earnings</th>
+                <th>Income Tax</th>
+                <th>Employee Insurance</th>
+                <th>CPP</th>
                 <th>After Tax</th>
               </tr>
             </thead>
             <tbody>
               {detailedHistory.length === 0 && (
                 <tr>
-                  <td colSpan={4} style={{ textAlign: "center" }}>No records</td>
+                  <td colSpan={7} style={{ textAlign: "center" }}>No records</td>
                 </tr>
               )}
               {detailedHistory.map(d => (
@@ -746,6 +804,9 @@ export default function App(): JSX.Element {
                   <td>{d.date}</td>
                   <td>{d.hours.toFixed(2)}</td>
                   <td>${d.earnings.toFixed(2)}</td>
+                  <td>${d.incomeTax.toFixed(2)}</td>
+                  <td>${d.employeeInsurance.toFixed(2)}</td>
+                  <td>${d.cpp.toFixed(2)}</td>
                   <td>${d.afterTax.toFixed(2)}</td>
                 </tr>
               ))}

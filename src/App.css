@@ -600,3 +600,54 @@ html.dark {
     padding: 2px 6px;
   }
 }
+
+/* Desktop: keep calendar header horizontal */
+.calendar-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: row;
+  gap: 8px;
+  width: 100%;
+}
+.calendar-header .month-title {
+  flex: none;
+  margin: 0 16px;
+  text-align: center;
+  width: auto; /* <-- remove width: 100% */
+  margin-top: 0;
+}
+
+/* Mobile: stack calendar header vertically */
+@media (max-width: 600px) {
+  .calendar-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 4px !important;
+  }
+  .calendar-header .month-title {
+    text-align: center;
+    width: 100% !important;
+    margin: 8px 0 0 0;
+  }
+}
+
+/* Make biweekly summary table horizontally scrollable on mobile */
+@media (max-width: 700px) {
+  .biweekly-card {
+    overflow-x: auto;
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 0 2px;
+  }
+  .biweekly-card table {
+    min-width: 700px;
+    width: max-content;
+    font-size: 13px;
+  }
+  .biweekly-card th, .biweekly-card td {
+    padding: 6px 4px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+}
