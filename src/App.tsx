@@ -73,6 +73,7 @@ export default function App(): JSX.Element {
     const v = localStorage.getItem("w2b_dark");
     return v ? v === "1" : false;
   });
+  const [lang, setLang] = useState<"en" | "zh-tw">("en");
 
   // UI transient
   const [notification, setNotification] = useState<string>("");
@@ -374,16 +375,70 @@ export default function App(): JSX.Element {
   }, [detailedHistory]);
 
   /* ---------------------- UI ---------------------- */
+  // Language labels
+  const labels = {
+    en: {
+      switch: "中文",
+      info: "Information",
+      totalEarned: "Total Earned After Tax",
+      totalItem: "Total Item Price After Tax",
+      totalTax: "Total Item Tax",
+      progress: "Total Progress",
+      autoFill: "Auto-fill Weekdays",
+      reset: "Reset Month Hours",
+      save: "Save",
+      clear: "Clear All",
+      addItem: "+ Add Item",
+      itemList: "Item List",
+      hourlyRate: "Hourly Rate",
+      startDate: "Start Date",
+      export: "Export Data",
+      import: "Import Data",
+      quickSave: "Quick Save",
+      details: "Details",
+      noRecords: "No records",
+      // ...add more as needed
+    },
+    "zh-tw": {
+      switch: "English",
+      info: "資訊",
+      totalEarned: "稅後總收入",
+      totalItem: "稅後總項目金額",
+      totalTax: "項目稅金",
+      progress: "總進度",
+      autoFill: "自動填寫平日",
+      reset: "重設本月工時",
+      save: "儲存",
+      clear: "全部清除",
+      addItem: "+ 新增項目",
+      itemList: "項目清單",
+      hourlyRate: "時薪",
+      startDate: "開始日期",
+      export: "匯出資料",
+      import: "匯入資料",
+      quickSave: "快速儲存",
+      details: "明細",
+      noRecords: "無紀錄",
+      // ...add more as needed
+    }
+  };
+
   return (
     <div className={`big-container ${darkMode ? "dark" : "light"}`}>
       {/* header */}
       <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <div>
           <h1 className="title-blob">Work Hours Tracker</h1>
-
         </div>
-
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {/* Language Switch Button */}
+          <button
+            className="btn small"
+            onClick={() => setLang(lang === "en" ? "zh-tw" : "en")}
+            style={{ minWidth: 60 }}
+          >
+            {labels[lang].switch}
+          </button>
           <button className="btn small" onClick={() => { setDarkMode(d => !d); notify(darkMode ? "Light mode" : "Dark mode"); }}>
             {darkMode ? "☀️ Light" : "🌙 Dark"}
           </button>
@@ -392,23 +447,23 @@ export default function App(): JSX.Element {
 
       {/* Information */}
       <div className="card info-card">
-        <h2>Information</h2>
+        <h2>{labels[lang].info}</h2>
         <div className="info-grid">
           <div className="info-item">
-            <div className="label">Total Earned After Tax</div>
+            <div className="label">{labels[lang].totalEarned}</div>
             <div className="value">${totalEarnedAfterTax.toFixed(2)}</div>
           </div>
           <div className="info-item">
-            <div className="label">Total Item Price After Tax</div>
+            <div className="label">{labels[lang].totalItem}</div>
             <div className="value">${totalAfterTaxItemPrice.toFixed(2)}</div>
           </div>
           <div className="info-item">
-            <div className="label">Total Item Tax</div>
+            <div className="label">{labels[lang].totalTax}</div>
             <div className="value">${totalItemTax.toFixed(2)}</div>
           </div>
         </div>
         <div className="progress-row">
-          <div className="progress-label">Total Progress</div>
+          <div className="progress-label">{labels[lang].progress}</div>
           <div className="progress-bar">
             <div className="progress-fill" style={{ width: `${progressPct}%` }} />
           </div>
@@ -420,20 +475,20 @@ export default function App(): JSX.Element {
       <div className="card controls">
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
           <div>
-            <label className="small-label">Hourly Rate</label>
+            <label className="small-label">{labels[lang].hourlyRate}</label>
             <input className="control-input" type="number" value={hourlyRate} onChange={e => setHourlyRate(Number(e.target.value))} />
           </div>
 
           <div>
-            <label className="small-label">Start Date</label>
+            <label className="small-label">{labels[lang].startDate}</label>
             <input className="control-input" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
           </div>
 
           <div style={{ marginTop: 25, display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button className="btn" onClick={autoFillWeekdays}>Auto-fill Weekdays</button>
-            <button className="btn warn" onClick={resetMonthHours}>Reset Month Hours</button>
-            <button className="btn success" onClick={saveAll}>Save</button>
-            <button className="btn danger" onClick={() => setShowClearConfirm(true)}>Clear All</button>
+            <button className="btn" onClick={autoFillWeekdays}>{labels[lang].autoFill}</button>
+            <button className="btn warn" onClick={resetMonthHours}>{labels[lang].reset}</button>
+            <button className="btn success" onClick={saveAll}>{labels[lang].save}</button>
+            <button className="btn danger" onClick={() => setShowClearConfirm(true)}>{labels[lang].clear}</button>
           </div>
         </div>
 
@@ -441,7 +496,7 @@ export default function App(): JSX.Element {
 
       {/* Items */}
       <div className="card">
-        <h3>Item List</h3>
+        <h3>{labels[lang].itemList}</h3>
         <div className="items-scroll">
           <table className="items-table">
             <thead>
@@ -469,7 +524,7 @@ export default function App(): JSX.Element {
           </table>
         </div>
         <div style={{ marginTop: 10 }}>
-          <button className="btn primary" onClick={addItem}>+ Add Item</button>
+          <button className="btn primary" onClick={addItem}>{labels[lang].addItem}</button>
         </div>
       </div>
 
@@ -766,20 +821,20 @@ export default function App(): JSX.Element {
 
       {/* Export / Import / Save / Clear */}
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap" }}>
-        <button className="btn primary" onClick={exportData}>Export Data</button>
+        <button className="btn primary" onClick={exportData}>{labels[lang].export}</button>
 
         <label className="btn primary">
-          Import Data
+          {labels[lang].import}
           <input type="file" accept="application/json" onChange={handleImportFile} style={{ display: "none" }} />
         </label>
 
-        <button className="btn" onClick={saveAll}>Quick Save</button>
-        <button className="btn danger" onClick={() => setShowClearConfirm(true)}>Clear All</button>
+        <button className="btn" onClick={saveAll}>{labels[lang].quickSave}</button>
+        <button className="btn danger" onClick={() => setShowClearConfirm(true)}>{labels[lang].clear}</button>
       </div>
 
       {/* Details / History */}
       <div className="card">
-        <h3>Details</h3>
+        <h3>{labels[lang].details}</h3>
         <div className="details-scroll">
           <table className="details-table">
             <thead>
@@ -796,7 +851,7 @@ export default function App(): JSX.Element {
             <tbody>
               {detailedHistory.length === 0 && (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: "center" }}>No records</td>
+                  <td colSpan={7} style={{ textAlign: "center" }}>{labels[lang].noRecords}</td>
                 </tr>
               )}
               {detailedHistory.map(d => (
