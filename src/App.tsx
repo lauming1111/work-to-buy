@@ -78,7 +78,7 @@ export default function App(): JSX.Element {
   // UI transient
   const [notification, setNotification] = useState<string>("");
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   // persist on change
   useEffect(() => localStorage.setItem("w2b_items", JSON.stringify(items)), [items]);
   useEffect(() => localStorage.setItem("w2b_hourlyRate", String(hourlyRate)), [hourlyRate]);
@@ -258,10 +258,16 @@ export default function App(): JSX.Element {
   };
 
   const resetMonthHours = () => {
+    // ask user to confirm before resetting
+    setShowResetConfirm(true);
+  };
+
+  const confirmResetMonth = () => {
     const y = currentDate.getFullYear();
     const m = String(currentDate.getMonth() + 1).padStart(2, "0");
     const prefix = `${y}-${m}-`;
     setDayHours(prev => prev.filter(h => !h.date.startsWith(prefix)));
+    setShowResetConfirm(false);
     notify(labels[lang].monthReset);
   };
 
@@ -378,6 +384,8 @@ export default function App(): JSX.Element {
   // Language labels
   const labels = {
     en: {
+      confirmResetTitle: "Reset this month's hours?",
+      okReset: "OK, Reset",
       switch: "中文",
       title: "Work Hours Tracker",
       info: "Information",
@@ -422,6 +430,8 @@ export default function App(): JSX.Element {
       disclaimerLine2: "Check my profile to know more about me!",
     },
     "zh-tw": {
+      confirmResetTitle: "是否重設本月工時？",
+      okReset: "確認重設",
       switch: "English",
       title: "工時記錄器",
       info: "資訊",
@@ -863,6 +873,19 @@ export default function App(): JSX.Element {
             <div className="modal-actions">
               <button className="btn" onClick={() => setShowClearConfirm(false)}>{labels[lang].cancel}</button>
               <button className="btn danger" onClick={confirmClearAll}>{labels[lang].okClear}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* reset month confirm modal */}
+      {showResetConfirm && (
+        <div className="modal-backdrop" onClick={() => setShowResetConfirm(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div>{labels[lang].confirmResetTitle}</div>
+            <div className="modal-actions">
+              <button className="btn" onClick={() => setShowResetConfirm(false)}>{labels[lang].cancel}</button>
+              <button className="btn warn" onClick={confirmResetMonth}>{labels[lang].okReset}</button>
             </div>
           </div>
         </div>
