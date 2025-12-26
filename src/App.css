@@ -137,6 +137,54 @@
 .btn.sm{padding:6px 8px}
 .btn.export{background:linear-gradient(135deg,#6366f1,#8b5cf6)}
 
+/* job tabs */
+.job-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.job-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+}
+.job-tabs-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  flex: 1;
+  padding-bottom: 4px;
+}
+.job-tab {
+  border: 1px solid rgba(0,0,0,0.12);
+  background: transparent;
+  color: inherit;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+.big-container.dark .job-tab { border: 1px solid rgba(255,255,255,0.18); }
+.job-tab.active {
+  background: linear-gradient(135deg,var(--primary-1),var(--primary-2));
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 6px 16px rgba(45,197,250,0.25);
+}
+.btn.soft-danger{
+  background: linear-gradient(135deg,#ff9a6b,#ff6a6a);
+  color: #fff;
+  box-shadow: 0 6px 14px rgba(255,106,106,0.25);
+}
+.btn.soft-danger:disabled{
+  opacity: 0.5;
+  box-shadow: none;
+}
+
 /* items table */
 .items-scroll { overflow:auto }
 .items-table { width:100%; border-collapse:collapse }
@@ -268,6 +316,8 @@
   .cal-cell { min-height:90px; padding:6px }
   .controls { flex-direction: column; align-items: stretch; }
   .btn { width: 100%; text-align: center; }
+  .job-tabs { flex-direction: column; align-items: stretch; }
+  .job-tabs-scroll { width: 100%; }
 }
 
 /* small-screen calendar: allow horizontal scroll while keeping readable cells */

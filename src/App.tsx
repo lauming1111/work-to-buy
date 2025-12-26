@@ -15,6 +15,11 @@ type Item = {
   enabled: boolean;
 };
 
+type JobMeta = {
+  id: string;
+  name: string;
+};
+
 type DayHours = {
   date: string; // "YYYY-MM-DD"
   start?: string | null; // "HH:MM"
@@ -34,6 +39,30 @@ type DetailedDay = {
   afterTax: number;
 };
 
+type JobExport = {
+  items: Item[];
+  hourlyRate: number;
+  dayHours: DayHours[];
+  startDate: string;
+  currentDate?: string;
+};
+
+type AllJobsExport = {
+  type: "w2b_all_jobs";
+  version: 1;
+  activeJobId: string;
+  jobs: JobMeta[];
+  jobData: Record<string, JobExport>;
+};
+
+type NormalizedJobData = {
+  items: Item[];
+  hourlyRate: number;
+  dayHours: DayHours[];
+  startDate: string;
+  currentDate: Date;
+};
+
 /* -------------------- Constants -------------------- */
 const INCOME_TAX_RATE = 0.117;
 const EMPLOYEE_INSURANCE_RATE = 0.0164;
@@ -50,25 +79,97 @@ const defaultItems: Item[] = [
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
 
+const DEFAULT_JOB_ID = "default";
+const DEFAULT_JOB_NAME = "Main Job";
+const JOBS_STORAGE_KEY = "w2b_jobs";
+const ACTIVE_JOB_STORAGE_KEY = "w2b_activeJob";
+const LEGACY_STORAGE_KEYS = {
+  items: "w2b_items",
+  hourlyRate: "w2b_hourlyRate",
+  dayHours: "w2b_history",
+  startDate: "w2b_startDate",
+  currentDate: "w2b_currentDate",
+} as const;
+
+const jobStorageKey = (jobId: string, key: keyof typeof LEGACY_STORAGE_KEYS) => `w2b_job_${jobId}_${key}`;
+
+const safeParse = <T,>(raw: string | null, fallback: T): T => {
+  if (!raw) return fallback;
+  try {
+    const parsed = JSON.parse(raw) as T;
+    return parsed == null ? fallback : parsed;
+  } catch {
+    return fallback;
+  }
+};
+
+const cloneDefaultItems = () => defaultItems.map(item => ({ ...item }));
+
+const createDefaultJobData = () => ({
+  items: cloneDefaultItems(),
+  hourlyRate: 17.2,
+  dayHours: [] as DayHours[],
+  startDate: ymd(getTorontoToday()),
+  currentDate: getTorontoToday(),
+});
+
+const getInitialJobs = (): JobMeta[] => {
+  const stored = safeParse<JobMeta[]>(localStorage.getItem(JOBS_STORAGE_KEY), []);
+  return stored.length ? stored : [{ id: DEFAULT_JOB_ID, name: DEFAULT_JOB_NAME }];
+};
+
+const getInitialActiveJobId = (jobs: JobMeta[]): string => {
+  const stored = localStorage.getItem(ACTIVE_JOB_STORAGE_KEY);
+  if (stored && jobs.some(job => job.id === stored)) return stored;
+  return jobs[0]?.id || DEFAULT_JOB_ID;
+};
+
+const readJobStorage = (jobId: string, key: keyof typeof LEGACY_STORAGE_KEYS) => {
+  const scoped = localStorage.getItem(jobStorageKey(jobId, key));
+  if (scoped != null) return scoped;
+  if (jobId === DEFAULT_JOB_ID) {
+    return localStorage.getItem(LEGACY_STORAGE_KEYS[key]);
+  }
+  return null;
+};
+
+const loadJobData = (jobId: string) => {
+  const fallback = createDefaultJobData();
+  const items = safeParse<Item[]>(readJobStorage(jobId, "items"), fallback.items);
+  const hourlyRateRaw = readJobStorage(jobId, "hourlyRate");
+  const hourlyRate = hourlyRateRaw != null && !isNaN(Number(hourlyRateRaw)) ? Number(hourlyRateRaw) : fallback.hourlyRate;
+  const dayHours = safeParse<DayHours[]>(readJobStorage(jobId, "dayHours"), fallback.dayHours);
+  const startDate = readJobStorage(jobId, "startDate") || fallback.startDate;
+  const currentDateRaw = readJobStorage(jobId, "currentDate");
+  const currentDateCandidate = currentDateRaw ? new Date(currentDateRaw) : fallback.currentDate;
+  const currentDate = isNaN(currentDateCandidate.getTime()) ? fallback.currentDate : currentDateCandidate;
+  return { items, hourlyRate, dayHours, startDate, currentDate };
+};
+
+const clearJobStorage = (jobId: string) => {
+  (Object.keys(LEGACY_STORAGE_KEYS) as Array<keyof typeof LEGACY_STORAGE_KEYS>).forEach(key => {
+    localStorage.removeItem(jobStorageKey(jobId, key));
+    if (jobId === DEFAULT_JOB_ID) {
+      localStorage.removeItem(LEGACY_STORAGE_KEYS[key]);
+    }
+  });
+};
+
 /* ---------------------- App ------------------------ */
 export default function App(): JSX.Element {
+  const initialJobs = getInitialJobs();
+  const initialActiveJobId = getInitialActiveJobId(initialJobs);
+  const initialJobData = loadJobData(initialActiveJobId);
+
+  const [jobs, setJobs] = useState<JobMeta[]>(initialJobs);
+  const [activeJobId, setActiveJobId] = useState<string>(initialActiveJobId);
+
   // persisted state
-  const [items, setItems] = useState<Item[]>(
-    () => JSON.parse(localStorage.getItem("w2b_items") || "null") || defaultItems
-  );
-  const [hourlyRate, setHourlyRate] = useState<number>(
-    () => Number(localStorage.getItem("w2b_hourlyRate") || "17.2")
-  );
-  const [dayHours, setDayHours] = useState<DayHours[]>(
-    () => JSON.parse(localStorage.getItem("w2b_history") || "null") || []
-  );
-  const [startDate, setStartDate] = useState<string>(
-    () => localStorage.getItem("w2b_startDate") || ymd(getTorontoToday())
-  );
-  const [currentDate, setCurrentDate] = useState<Date>(() => {
-    const s = localStorage.getItem("w2b_currentDate");
-    return s ? new Date(s) : getTorontoToday();
-  });
+  const [items, setItems] = useState<Item[]>(initialJobData.items);
+  const [hourlyRate, setHourlyRate] = useState<number>(initialJobData.hourlyRate);
+  const [dayHours, setDayHours] = useState<DayHours[]>(initialJobData.dayHours);
+  const [startDate, setStartDate] = useState<string>(initialJobData.startDate);
+  const [currentDate, setCurrentDate] = useState<Date>(initialJobData.currentDate);
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     const v = localStorage.getItem("w2b_dark");
     return v ? v === "1" : false;
@@ -80,11 +181,13 @@ export default function App(): JSX.Element {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   // persist on change
-  useEffect(() => localStorage.setItem("w2b_items", JSON.stringify(items)), [items]);
-  useEffect(() => localStorage.setItem("w2b_hourlyRate", String(hourlyRate)), [hourlyRate]);
-  useEffect(() => localStorage.setItem("w2b_history", JSON.stringify(dayHours)), [dayHours]);
-  useEffect(() => localStorage.setItem("w2b_startDate", startDate), [startDate]);
-  useEffect(() => localStorage.setItem("w2b_currentDate", currentDate.toISOString()), [currentDate]);
+  useEffect(() => localStorage.setItem(JOBS_STORAGE_KEY, JSON.stringify(jobs)), [jobs]);
+  useEffect(() => localStorage.setItem(ACTIVE_JOB_STORAGE_KEY, activeJobId), [activeJobId]);
+  useEffect(() => localStorage.setItem(jobStorageKey(activeJobId, "items"), JSON.stringify(items)), [items, activeJobId]);
+  useEffect(() => localStorage.setItem(jobStorageKey(activeJobId, "hourlyRate"), String(hourlyRate)), [hourlyRate, activeJobId]);
+  useEffect(() => localStorage.setItem(jobStorageKey(activeJobId, "dayHours"), JSON.stringify(dayHours)), [dayHours, activeJobId]);
+  useEffect(() => localStorage.setItem(jobStorageKey(activeJobId, "startDate"), startDate), [startDate, activeJobId]);
+  useEffect(() => localStorage.setItem(jobStorageKey(activeJobId, "currentDate"), currentDate.toISOString()), [currentDate, activeJobId]);
   useEffect(() => localStorage.setItem("w2b_dark", darkMode ? "1" : "0"), [darkMode]);
 
   useEffect(() => {
@@ -100,6 +203,71 @@ export default function App(): JSX.Element {
   const notify = (msg: string) => {
     setNotification(msg);
     setTimeout(() => setNotification(""), 3000);
+  };
+
+  const activeJob = jobs.find(job => job.id === activeJobId) || jobs[0];
+
+  const persistJobData = (jobId: string) => {
+    localStorage.setItem(jobStorageKey(jobId, "items"), JSON.stringify(items));
+    localStorage.setItem(jobStorageKey(jobId, "hourlyRate"), String(hourlyRate));
+    localStorage.setItem(jobStorageKey(jobId, "dayHours"), JSON.stringify(dayHours));
+    localStorage.setItem(jobStorageKey(jobId, "startDate"), startDate);
+    localStorage.setItem(jobStorageKey(jobId, "currentDate"), currentDate.toISOString());
+  };
+
+  const switchJob = (jobId: string) => {
+    if (jobId === activeJobId) return;
+    persistJobData(activeJobId);
+    const data = loadJobData(jobId);
+    setItems(data.items);
+    setHourlyRate(data.hourlyRate);
+    setDayHours(data.dayHours);
+    setStartDate(data.startDate);
+    setCurrentDate(data.currentDate);
+    setActiveJobId(jobId);
+  };
+
+  const addJob = () => {
+    const defaultName = `Job ${jobs.length + 1}`;
+    const name = prompt("Job name:", defaultName);
+    if (name === null) return;
+    const trimmed = name.trim();
+    const jobName = trimmed || defaultName;
+    const jobId = `job_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const nextJobs = [...jobs, { id: jobId, name: jobName }];
+    persistJobData(activeJobId);
+    setJobs(nextJobs);
+    const data = createDefaultJobData();
+    setItems(data.items);
+    setHourlyRate(data.hourlyRate);
+    setDayHours(data.dayHours);
+    setStartDate(data.startDate);
+    setCurrentDate(data.currentDate);
+    setActiveJobId(jobId);
+  };
+
+  const removeJob = (jobId: string) => {
+    if (jobs.length <= 1) {
+      notify(labels[lang].cannotRemoveLastJob);
+      return;
+    }
+    const job = jobs.find(j => j.id === jobId);
+    const name = job?.name || labels[lang].job;
+    if (!window.confirm(`${labels[lang].confirmRemoveJob} "${name}"?`)) return;
+    clearJobStorage(jobId);
+    const nextJobs = jobs.filter(j => j.id !== jobId);
+    setJobs(nextJobs);
+    if (jobId === activeJobId) {
+      const nextActive = nextJobs[0].id;
+      const data = loadJobData(nextActive);
+      setItems(data.items);
+      setHourlyRate(data.hourlyRate);
+      setDayHours(data.dayHours);
+      setStartDate(data.startDate);
+      setCurrentDate(data.currentDate);
+      setActiveJobId(nextActive);
+    }
+    notify(labels[lang].removedJob);
   };
 
   /* ---------------- helper indices ---------------- */
@@ -304,8 +472,48 @@ export default function App(): JSX.Element {
   const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
 
   // export / import JSON
+  const normalizeJobList = (raw: any): JobMeta[] => {
+    if (!Array.isArray(raw)) return [];
+    const seen = new Set<string>();
+    const normalized: JobMeta[] = [];
+    raw.forEach((job: any) => {
+      if (!job || typeof job.id !== "string" || typeof job.name !== "string") return;
+      if (!job.id.trim() || seen.has(job.id)) return;
+      seen.add(job.id);
+      normalized.push({ id: job.id, name: job.name });
+    });
+    return normalized;
+  };
+
+  const normalizeJobData = (raw?: JobExport | null): NormalizedJobData => {
+    const fallback = createDefaultJobData();
+    const items = raw && Array.isArray(raw.items) ? raw.items : fallback.items;
+    const hourlyRate = raw && raw.hourlyRate != null && !isNaN(Number(raw.hourlyRate))
+      ? Number(raw.hourlyRate)
+      : fallback.hourlyRate;
+    const dayHours = raw && Array.isArray(raw.dayHours) ? raw.dayHours : fallback.dayHours;
+    const startDate = raw && typeof raw.startDate === "string" && raw.startDate ? raw.startDate : fallback.startDate;
+    const currentDateCandidate = raw && raw.currentDate ? new Date(raw.currentDate) : fallback.currentDate;
+    const currentDate = isNaN(currentDateCandidate.getTime()) ? fallback.currentDate : currentDateCandidate;
+    return { items, hourlyRate, dayHours, startDate, currentDate };
+  };
+
+  const buildJobExport = (jobId: string): JobExport => {
+    const data = jobId === activeJobId
+      ? { items, hourlyRate, dayHours, startDate, currentDate }
+      : loadJobData(jobId);
+    return {
+      items: data.items,
+      hourlyRate: data.hourlyRate,
+      dayHours: data.dayHours,
+      startDate: data.startDate,
+      currentDate: data.currentDate.toISOString(),
+    };
+  };
+
   const exportData = () => {
     const out = {
+      jobName: activeJob?.name,
       items,
       hourlyRate,
       startDate,
@@ -318,7 +526,62 @@ export default function App(): JSX.Element {
     a.download = `work-to-buy-${ymd(new Date())}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    notify("Exported JSON");
+    notify(labels[lang].exported);
+  };
+
+  const exportAllData = () => {
+    const jobData: Record<string, JobExport> = {};
+    jobs.forEach(job => {
+      jobData[job.id] = buildJobExport(job.id);
+    });
+    const out: AllJobsExport = {
+      type: "w2b_all_jobs",
+      version: 1,
+      activeJobId,
+      jobs,
+      jobData,
+    };
+    const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `work-to-buy-all-${ymd(new Date())}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    notify(labels[lang].exportedAll);
+  };
+
+  const importAllJobs = (payload: AllJobsExport) => {
+    const nextJobs = normalizeJobList(payload.jobs);
+    if (nextJobs.length === 0) {
+      notify(labels[lang].invalidImport);
+      return;
+    }
+    const jobData = payload.jobData && typeof payload.jobData === "object" ? payload.jobData : {};
+    const jobDataMap = jobData as Record<string, JobExport>;
+    jobs.forEach(job => clearJobStorage(job.id));
+    nextJobs.forEach(job => {
+      const normalized = normalizeJobData(jobDataMap[job.id]);
+      localStorage.setItem(jobStorageKey(job.id, "items"), JSON.stringify(normalized.items));
+      localStorage.setItem(jobStorageKey(job.id, "hourlyRate"), String(normalized.hourlyRate));
+      localStorage.setItem(jobStorageKey(job.id, "dayHours"), JSON.stringify(normalized.dayHours));
+      localStorage.setItem(jobStorageKey(job.id, "startDate"), normalized.startDate);
+      localStorage.setItem(jobStorageKey(job.id, "currentDate"), normalized.currentDate.toISOString());
+    });
+
+    const nextActive = typeof payload.activeJobId === "string" && nextJobs.some(job => job.id === payload.activeJobId)
+      ? payload.activeJobId
+      : nextJobs[0].id;
+    const activeData = normalizeJobData(jobDataMap[nextActive]);
+
+    setJobs(nextJobs);
+    setActiveJobId(nextActive);
+    setItems(activeData.items);
+    setHourlyRate(activeData.hourlyRate);
+    setDayHours(activeData.dayHours);
+    setStartDate(activeData.startDate);
+    setCurrentDate(activeData.currentDate);
+    notify(labels[lang].importedAll);
   };
 
   const handleImportFile = (ev: React.ChangeEvent<HTMLInputElement>) => {
@@ -328,13 +591,17 @@ export default function App(): JSX.Element {
     reader.onload = e => {
       try {
         const parsed = JSON.parse(String(e.target?.result || ""));
+        if (parsed && Array.isArray(parsed.jobs) && parsed.jobData && typeof parsed.jobData === "object") {
+          importAllJobs(parsed as AllJobsExport);
+          return;
+        }
         if (parsed.items) setItems(parsed.items);
         if (parsed.hourlyRate) setHourlyRate(Number(parsed.hourlyRate));
         if (parsed.startDate) setStartDate(parsed.startDate);
         if (parsed.dayHours) setDayHours(parsed.dayHours);
-        notify("Imported data");
+        notify(labels[lang].imported);
       } catch (err) {
-        notify("Invalid import file");
+        notify(labels[lang].invalidImport);
       }
     };
     reader.readAsText(file);
@@ -342,22 +609,22 @@ export default function App(): JSX.Element {
   };
 
   const saveAll = () => {
-    localStorage.setItem("w2b_items", JSON.stringify(items));
-    localStorage.setItem("w2b_hourlyRate", String(hourlyRate));
-    localStorage.setItem("w2b_history", JSON.stringify(dayHours));
-    localStorage.setItem("w2b_startDate", startDate);
+    persistJobData(activeJobId);
+    localStorage.setItem(JOBS_STORAGE_KEY, JSON.stringify(jobs));
+    localStorage.setItem(ACTIVE_JOB_STORAGE_KEY, activeJobId);
     localStorage.setItem("w2b_dark", darkMode ? "1" : "0");
     notify("Saved");
   };
 
   const clearAll = () => setShowClearConfirm(true);
   const confirmClearAll = () => {
-    setItems(defaultItems);
+    clearJobStorage(activeJobId);
+    setItems(cloneDefaultItems());
     setDayHours([]);
     setHourlyRate(17.2);
-    setStartDate(ymd(new Date()));
+    setStartDate(ymd(getTorontoToday()));
+    setCurrentDate(getTorontoToday());
     setDarkMode(false);
-    localStorage.clear();
     setShowClearConfirm(false);
     notify("All cleared");
   };
@@ -403,7 +670,10 @@ export default function App(): JSX.Element {
       hourlyRate: "Hourly Rate",
       startDate: "Start Date",
       export: "Export Data",
+      exportAll: "Export All Jobs",
       import: "Import Data",
+      job: "Job",
+      removeJob: "Remove Job",
       quickSave: "Quick Save",
       details: "Details",
       noRecords: "No records",
@@ -414,8 +684,13 @@ export default function App(): JSX.Element {
       prevMonth: "Prev",
       nextMonth: "Next",
       imported: "Imported data",
+      importedAll: "Imported all jobs",
       invalidImport: "Invalid import file",
       exported: "Exported JSON",
+      exportedAll: "Exported all jobs",
+      confirmRemoveJob: "Remove job",
+      removedJob: "Removed job",
+      cannotRemoveLastJob: "At least one job must remain",
       saved: "Saved",
       allCleared: "All cleared",
       lightMode: "Light",
@@ -449,6 +724,9 @@ export default function App(): JSX.Element {
       hourlyRate: "時薪",
       startDate: "開始日期",
       export: "匯出資料",
+      exportAll: "Export All Jobs",
+      job: "Job",
+      removeJob: "Remove Job",
       import: "匯入資料",
       quickSave: "快速儲存",
       details: "明細",
@@ -460,8 +738,13 @@ export default function App(): JSX.Element {
       prevMonth: "上個月",
       nextMonth: "下個月",
       imported: "已匯入資料",
+      importedAll: "Imported all jobs",
       invalidImport: "匯入檔案格式錯誤",
       exported: "已匯出 JSON",
+      exportedAll: "Exported all jobs",
+      confirmRemoveJob: "Remove job",
+      removedJob: "Removed job",
+      cannotRemoveLastJob: "At least one job must remain",
       saved: "已儲存",
       allCleared: "已全部清除",
       lightMode: "淺色",
@@ -498,6 +781,28 @@ export default function App(): JSX.Element {
           </button>
         </div>
       </header>
+
+      {/* Job tabs */}
+      <div className="job-tabs">
+        <div className="job-tabs-scroll">
+          {jobs.map(job => (
+            <button
+              key={job.id}
+              className={`job-tab ${job.id === activeJobId ? "active" : ""}`}
+              onClick={() => switchJob(job.id)}
+              title={job.name}
+            >
+              {job.name}
+            </button>
+          ))}
+        </div>
+        <div className="job-actions">
+          <button className="btn small primary" onClick={addJob}>+ Job</button>
+          <button className="btn small soft-danger" onClick={() => removeJob(activeJobId)} disabled={jobs.length <= 1}>
+            {labels[lang].removeJob}
+          </button>
+        </div>
+      </div>
 
       {/* Information */}
       <div className="card info-card">
@@ -814,6 +1119,7 @@ export default function App(): JSX.Element {
       {/* Export / Import / Save / Clear */}
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap" }}>
         <button className="btn primary" onClick={exportData}>{labels[lang].export}</button>
+        <button className="btn primary" onClick={exportAllData}>{labels[lang].exportAll}</button>
 
         <label className="btn primary">
           {labels[lang].import}
