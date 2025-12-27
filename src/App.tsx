@@ -68,7 +68,9 @@ const INCOME_TAX_RATE = 0.117;
 const EMPLOYEE_INSURANCE_RATE = 0.0164;
 const CPP_RATE = 0.05482;
 const BIWEEKLY_TAXFREE_THRESHOLD = 88;
-const BIWEEKLY_BONUS_RATE = 0.08; // 8% bonus per cycle
+const BIWEEKLY_BONUS_RATE = 0.04; // 4% vacation pay per cycle
+const WEEKLY_OVERTIME_THRESHOLD = 44;
+const OVERTIME_MULTIPLIER = 1.5;
 
 const defaultItems: Item[] = [
   { id: 1, name: "Rent", price: 0, taxable: false, enabled: true },
@@ -107,7 +109,7 @@ const cloneDefaultItems = () => defaultItems.map(item => ({ ...item }));
 
 const createDefaultJobData = () => ({
   items: cloneDefaultItems(),
-  hourlyRate: 17.2,
+  hourlyRate: 17.6,
   dayHours: [] as DayHours[],
   startDate: ymd(getTorontoToday()),
   currentDate: getTorontoToday(),
@@ -206,6 +208,7 @@ export default function App(): JSX.Element {
   };
 
   const activeJob = jobs.find(job => job.id === activeJobId) || jobs[0];
+  const useUnlawfulRule = (activeJob?.name ?? "").trim() === "3495";
 
   const persistJobData = (jobId: string) => {
     localStorage.setItem(jobStorageKey(jobId, "items"), JSON.stringify(items));
@@ -289,11 +292,10 @@ export default function App(): JSX.Element {
 
     const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
 
-    const weeklyTotals = new Map<number, number>();
+    const weeklyWorked = new Map<number, number>();
     const biWeeklyTotals = new Map<number, number>();
     for (const r of sorted) {
-      const { weekIndex, biWeekIndex } = getIndexInfo(r.date);
-      weeklyTotals.set(weekIndex, (weeklyTotals.get(weekIndex) || 0) + (r.hours || 0));
+      const { biWeekIndex } = getIndexInfo(r.date);
       biWeeklyTotals.set(biWeekIndex, (biWeeklyTotals.get(biWeekIndex) || 0) + (r.hours || 0));
     }
 
@@ -306,23 +308,38 @@ export default function App(): JSX.Element {
         continue;
       }
 
-      const { biWeekIndex } = getIndexInfo(r.date);
+      const { weekIndex, biWeekIndex } = getIndexInfo(r.date);
       const biWeekHours = biWeeklyTotals.get(biWeekIndex) || 0;
 
-      // Calculate tax-free hours for this day
-      let dayTaxFree = 0;
-      if (biWeekHours > BIWEEKLY_TAXFREE_THRESHOLD && biWeekHours > 0) {
-        const extra = biWeekHours - BIWEEKLY_TAXFREE_THRESHOLD;
-        dayTaxFree = round2((h / biWeekHours) * extra);
-        dayTaxFree = Math.min(dayTaxFree, h);
-      }
-
-      // 8% bonus for all hours in this bi-week
+      // 4% vacation pay for all hours in this bi-week
       const bonusMultiplier = 1 + BIWEEKLY_BONUS_RATE;
-      const earnings = h * hourlyRate * bonusMultiplier;
 
-      const taxableHours = Math.max(0, h - dayTaxFree);
-      const taxableEarnings = taxableHours * hourlyRate * bonusMultiplier;
+      let earnings = 0;
+      let taxableEarnings = 0;
+
+      if (useUnlawfulRule) {
+        // Calculate tax-free hours for this day (only for the unlawful rule job)
+        let dayTaxFree = 0;
+        if (biWeekHours > BIWEEKLY_TAXFREE_THRESHOLD && biWeekHours > 0) {
+          const extra = biWeekHours - BIWEEKLY_TAXFREE_THRESHOLD;
+          dayTaxFree = round2((h / biWeekHours) * extra);
+          dayTaxFree = Math.min(dayTaxFree, h);
+        }
+
+        earnings = h * hourlyRate * bonusMultiplier;
+        const taxableHours = Math.max(0, h - dayTaxFree);
+        taxableEarnings = taxableHours * hourlyRate * bonusMultiplier;
+      } else {
+        const workedSoFar = weeklyWorked.get(weekIndex) || 0;
+        const regularHours = Math.max(0, Math.min(h, WEEKLY_OVERTIME_THRESHOLD - workedSoFar));
+        const overtimeHours = Math.max(0, h - regularHours);
+        weeklyWorked.set(weekIndex, workedSoFar + h);
+
+        const regularEarnings = regularHours * hourlyRate * bonusMultiplier;
+        const overtimeEarnings = overtimeHours * hourlyRate * OVERTIME_MULTIPLIER * bonusMultiplier;
+        earnings = regularEarnings + overtimeEarnings;
+        taxableEarnings = earnings;
+      }
 
       const incomeTax = round2(taxableEarnings * INCOME_TAX_RATE);
       const employeeInsurance = round2(taxableEarnings * EMPLOYEE_INSURANCE_RATE);
@@ -342,7 +359,7 @@ export default function App(): JSX.Element {
     }
 
     return results;
-  }, [dayHours, hourlyRate, startDate]);
+  }, [dayHours, hourlyRate, startDate, useUnlawfulRule]);
 
   /* ---------------- summaries ---------------- */
   const totalEarnedAfterTax = useMemo(() => round2(detailedHistory.reduce((s, d) => s + d.afterTax, 0)), [detailedHistory]);
@@ -621,7 +638,7 @@ export default function App(): JSX.Element {
     clearJobStorage(activeJobId);
     setItems(cloneDefaultItems());
     setDayHours([]);
-    setHourlyRate(17.2);
+    setHourlyRate(17.6);
     setStartDate(ymd(getTorontoToday()));
     setCurrentDate(getTorontoToday());
     setDarkMode(false);
@@ -1052,13 +1069,13 @@ export default function App(): JSX.Element {
                 <th>Period</th>
                 <th>Hrs</th>
                 <th>Period Date</th>
-                <th>Earnings ({"<="}88)</th>
-                <th>Earnings ({">"}88)</th>
+                <th>{useUnlawfulRule ? "Earnings (<=88)" : "Earnings"}</th>
+                <th>{useUnlawfulRule ? "Earnings (>88)" : "Overtime Earnings"}</th>
                 <th>Income Tax</th>
                 <th>EI</th>
                 <th>CPP</th>
-                <th>Net ({"<"}88)</th>
-                <th>Take-Home Pay</th>
+                <th>{useUnlawfulRule ? "Net (<88)" : "Net"}</th>
+                <th>Take-Home Pay</th>
               </tr>
             </thead>
             <tbody>
@@ -1069,45 +1086,64 @@ export default function App(): JSX.Element {
                 const periodDetails = detailedHistory.filter(d => periodDays.some(day => day.date === d.date));
                 const hours = periodDetails.reduce((sum, d) => sum + d.hours, 0);
 
-                // Calculate first 88 hours earnings (+8%) and after deduction
-                let taxedHours = 0;
-                let earnings88 = 0;
-                let cashEarnings = 0;
-                for (const d of periodDetails) {
-                  const h = d.hours;
-                  const bonusMultiplier = 1 + BIWEEKLY_BONUS_RATE;
-                  const taxedLeft = Math.max(0, BIWEEKLY_TAXFREE_THRESHOLD - taxedHours);
-                  const thisTaxed = Math.min(h, taxedLeft);
-                  const thisCash = h - thisTaxed;
-                  taxedHours += thisTaxed;
-                  earnings88 += thisTaxed * hourlyRate * bonusMultiplier;
-                  cashEarnings += thisCash * hourlyRate * bonusMultiplier;
+                // Calculate earnings split for this period
+                let regularEarnings = 0;
+                let overtimeEarnings = 0;
+                const bonusMultiplier = 1 + BIWEEKLY_BONUS_RATE;
+                if (useUnlawfulRule) {
+                  let taxedHours = 0;
+                  for (const d of periodDetails) {
+                    const h = d.hours;
+                    const taxedLeft = Math.max(0, BIWEEKLY_TAXFREE_THRESHOLD - taxedHours);
+                    const thisTaxed = Math.min(h, taxedLeft);
+                    const thisOver = h - thisTaxed;
+                    taxedHours += thisTaxed;
+                    regularEarnings += thisTaxed * hourlyRate * bonusMultiplier;
+                    overtimeEarnings += thisOver * hourlyRate * bonusMultiplier;
+                  }
+                } else {
+                  const weeklyWorked = new Map<number, number>();
+                  for (const d of periodDetails) {
+                    const { weekIndex } = getIndexInfo(d.date);
+                    const workedSoFar = weeklyWorked.get(weekIndex) || 0;
+                    const regularHours = Math.max(0, Math.min(d.hours, WEEKLY_OVERTIME_THRESHOLD - workedSoFar));
+                    const overtimeHours = Math.max(0, d.hours - regularHours);
+                    weeklyWorked.set(weekIndex, workedSoFar + d.hours);
+                    regularEarnings += regularHours * hourlyRate * bonusMultiplier;
+                    overtimeEarnings += overtimeHours * hourlyRate * OVERTIME_MULTIPLIER * bonusMultiplier;
+                  }
                 }
-                const totalIncome = earnings88 + cashEarnings;
 
-                // Deductions for first 88 hours only
-                const incomeTax88 = round2(earnings88 * INCOME_TAX_RATE);
-                const employeeInsurance88 = round2(earnings88 * EMPLOYEE_INSURANCE_RATE);
-                const cpp88 = round2(earnings88 * CPP_RATE);
-                const afterTax88 = round2(earnings88 - incomeTax88 - employeeInsurance88 - cpp88);
+                // Deductions for regular hours (unlawful rule display)
+                const incomeTaxRegular = round2(regularEarnings * INCOME_TAX_RATE);
+                const employeeInsuranceRegular = round2(regularEarnings * EMPLOYEE_INSURANCE_RATE);
+                const cppRegular = round2(regularEarnings * CPP_RATE);
+                const afterTaxRegular = round2(regularEarnings - incomeTaxRegular - employeeInsuranceRegular - cppRegular);
 
-                // Deductions for all hours (for display)
-                const incomeTax = periodDetails.reduce((sum, d) => sum + d.incomeTax, 0);
-                const employeeInsurance = periodDetails.reduce((sum, d) => sum + d.employeeInsurance, 0);
-                const cpp = periodDetails.reduce((sum, d) => sum + d.cpp, 0);
+                // Deductions for all hours (lawful rule)
+                const incomeTaxTotal = periodDetails.reduce((sum, d) => sum + d.incomeTax, 0);
+                const employeeInsuranceTotal = periodDetails.reduce((sum, d) => sum + d.employeeInsurance, 0);
+                const cppTotal = periodDetails.reduce((sum, d) => sum + d.cpp, 0);
+                const afterTaxTotal = periodDetails.reduce((sum, d) => sum + d.afterTax, 0);
+
+                const displayIncomeTax = useUnlawfulRule ? incomeTaxRegular : incomeTaxTotal;
+                const displayEmployeeInsurance = useUnlawfulRule ? employeeInsuranceRegular : employeeInsuranceTotal;
+                const displayCpp = useUnlawfulRule ? cppRegular : cppTotal;
+                const displayNet = useUnlawfulRule ? afterTaxRegular : afterTaxTotal;
+                const displayTakeHome = useUnlawfulRule ? afterTaxRegular + overtimeEarnings : afterTaxTotal;
 
                 return (
                   <tr key={b.index}>
                     <td>{b.index}</td>
                     <td>{round2(hours)}</td>
                     <td>{periodDates}</td>
-                    <td>${round2(earnings88).toFixed(2)}</td>
-                    <td>${round2(cashEarnings).toFixed(2)}</td>
-                    <td>${round2(incomeTax88).toFixed(2)}</td>
-                    <td>${round2(employeeInsurance88).toFixed(2)}</td>
-                    <td>${round2(cpp88).toFixed(2)}</td>
-                    <td>${round2(afterTax88).toFixed(2)}</td> {/* Expected Take-Home Pay */}
-                    <td>${round2(afterTax88 + cashEarnings).toFixed(2)}</td>
+                    <td>${round2(regularEarnings).toFixed(2)}</td>
+                    <td>${round2(overtimeEarnings).toFixed(2)}</td>
+                    <td>${round2(displayIncomeTax).toFixed(2)}</td>
+                    <td>${round2(displayEmployeeInsurance).toFixed(2)}</td>
+                    <td>${round2(displayCpp).toFixed(2)}</td>
+                    <td>${round2(displayNet).toFixed(2)}</td>
+                    <td>${round2(displayTakeHome).toFixed(2)}</td> {/* Expected Take-Home Pay */}
                   </tr>
                 );
               })}
