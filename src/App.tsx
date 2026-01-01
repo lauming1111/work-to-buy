@@ -25,7 +25,8 @@ type DayHours = {
   start?: string | null; // "HH:MM"
   end?: string | null;   // "HH:MM"
   hours?: number | null; // calculated, not user input
-  lunch?: boolean;       // lunch checkbox state, default true
+  lunch?: boolean;       // legacy lunch toggle state
+  lunchMinutes?: number | null; // minutes to subtract when lunch is enabled
   originalHours?: number | null; // <-- add this line
 };
 
@@ -71,6 +72,7 @@ const BIWEEKLY_TAXFREE_THRESHOLD = 88;
 const BIWEEKLY_BONUS_RATE = 0.04; // 4% vacation pay per cycle
 const WEEKLY_OVERTIME_THRESHOLD = 44;
 const OVERTIME_MULTIPLIER = 1.5;
+const DEFAULT_LUNCH_MINUTES = 30;
 
 const defaultItems: Item[] = [
   { id: 1, name: "Rent", price: 0, taxable: false, enabled: true },
@@ -80,6 +82,26 @@ const defaultItems: Item[] = [
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
+
+const clampLunchMinutes = (value?: number | null) => {
+  if (value == null) return DEFAULT_LUNCH_MINUTES;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return DEFAULT_LUNCH_MINUTES;
+  return Math.max(0, Math.min(180, Math.round(n)));
+};
+
+const getLunchMinutes = (entry?: DayHours | null) => {
+  if (!entry) return 0;
+  if (entry.lunchMinutes != null) return clampLunchMinutes(entry.lunchMinutes);
+  if (entry.lunch === false) return 0;
+  return DEFAULT_LUNCH_MINUTES;
+};
+
+const getOriginalHours = (entry: DayHours) => {
+  if (entry.originalHours != null) return entry.originalHours;
+  if (entry.hours != null && !entry.start && !entry.end) return entry.hours;
+  return null;
+};
 
 const DEFAULT_JOB_ID = "default";
 const DEFAULT_JOB_NAME = "Main Job";
@@ -403,16 +425,16 @@ export default function App(): JSX.Element {
     setDayHours(prev => {
       const other = prev.filter(p => p.date !== date);
       const existing = prev.find(p => p.date === date);
-      const lunch = existing?.lunch ?? true;
+      const lunchMinutes = getLunchMinutes(existing);
       // Always store the original entered hours
       const originalHours = n;
-      const hours = lunch ? Math.max(0, n - 0.5) : n;
+      const hours = Math.max(0, n - lunchMinutes / 60);
       return [
         ...other,
         {
           date,
           hours,
-          lunch,
+          lunchMinutes,
           originalHours,
         },
       ];
@@ -425,8 +447,8 @@ export default function App(): JSX.Element {
     setDayHours(prev => {
       const other = prev.filter(p => p.date !== date);
       const existing = prev.find(p => p.date === date) || { date, start: "", end: "" };
-      const lunch = existing.lunch ?? true;
-      const updated = { ...existing, [field]: value?.format("HH:mm"), lunch };
+      const lunchMinutes = getLunchMinutes(existing);
+      const updated = { ...existing, [field]: value?.format("HH:mm"), lunchMinutes };
 
       let hours: number | null = null;
       if (updated.start && updated.end) {
@@ -434,11 +456,37 @@ export default function App(): JSX.Element {
         const [eh, em] = updated.end.split(":").map(Number);
         const startMins = sh * 60 + sm;
         let endMins = eh * 60 + em;
-        if (lunch) endMins -= 30; // subtract 30 mins if lunch is true
+        endMins -= lunchMinutes;
         hours = (endMins - startMins) / 60;
         if (hours < 0 || hours > 24) hours = null;
       }
       return [...other, { ...updated, hours }];
+    });
+  };
+
+  const handleLunchMinutesInput = (date: string, raw: string) => {
+    const parsed = Number(raw);
+    const lunchMinutes = clampLunchMinutes(Number.isFinite(parsed) ? parsed : DEFAULT_LUNCH_MINUTES);
+    setDayHours(prev => {
+      const other = prev.filter(p => p.date !== date);
+      const existing = prev.find(p => p.date === date) || { date };
+      const updated: DayHours = { ...existing, lunchMinutes };
+      const originalHours = getOriginalHours(updated);
+
+      if (updated.start && updated.end) {
+        const [sh, sm] = updated.start.split(":").map(Number);
+        const [eh, em] = updated.end.split(":").map(Number);
+        const startMins = sh * 60 + sm;
+        const endMins = eh * 60 + em;
+        let hours = (endMins - startMins) / 60;
+        hours -= lunchMinutes / 60;
+        updated.hours = (hours >= 0 && hours <= 24) ? round2(hours) : null;
+      } else if (originalHours != null && (!updated.start && !updated.end)) {
+        updated.originalHours = originalHours;
+        updated.hours = Math.max(0, round2(originalHours - lunchMinutes / 60));
+      }
+
+      return [...other, updated];
     });
   };
 
@@ -694,9 +742,7 @@ export default function App(): JSX.Element {
       quickSave: "Quick Save",
       details: "Details",
       noRecords: "No records",
-      subtractLunchDesc: "Subtract 30 min from worked hours when ON",
-      lunchOn: "Lunch",
-      lunchOff: "No Lunch",
+      lunchMinutesLabel: "Lunch (min)",
       resetHours: "Reset Hours",
       prevMonth: "Prev",
       nextMonth: "Next",
@@ -748,9 +794,7 @@ export default function App(): JSX.Element {
       quickSave: "快速儲存",
       details: "明細",
       noRecords: "無紀錄",
-      subtractLunchDesc: "啟用後會從工時中扣除 30 分鐘午休",
-      lunchOn: "午休",
-      lunchOff: "沒有午休",
+      lunchMinutesLabel: "午休(分鐘)",
       resetHours: "重設工時",
       prevMonth: "上個月",
       nextMonth: "下個月",
@@ -999,42 +1043,22 @@ export default function App(): JSX.Element {
                     {rec ? `$${rec.afterTax.toFixed(2)}` : ""}
                   </div>
 
-                  {/* --- NEW: Lunch toggle + description (placed above reset button) --- */}
+                  {/* Lunch minutes (placed above reset button) */}
                   <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 6, marginTop: 6 }}>
-                    <button
-                      className={`btn sm lunch-toggle ${(rawEntry?.lunch ?? true) ? "" : "off"}`}
-                      aria-pressed={!!(rawEntry?.lunch ?? true)}
-                      onClick={() => {
-                        const lunchChecked = !(rawEntry?.lunch ?? true);
-                        setDayHours(prev => {
-                          const other = prev.filter(p => p.date !== dateStr);
-                          const existing = prev.find(p => p.date === dateStr) || { date: dateStr, lunch: true };
-                          let originalHours = existing.originalHours ?? existing.hours ?? null;
-                          if (existing.hours != null && existing.originalHours == null) originalHours = existing.hours;
-                          let updated: DayHours = { ...existing, lunch: lunchChecked, originalHours };
-
-                          if (updated.start && updated.end) {
-                            const [sh, sm] = updated.start.split(":").map(Number);
-                            const [eh, em] = updated.end.split(":").map(Number);
-                            const startMins = sh * 60 + sm;
-                            let endMins = eh * 60 + em;
-                            let hours = (endMins - startMins) / 60;
-                            if (lunchChecked) hours -= 0.5;
-                            updated.hours = (hours >= 0 && hours <= 24) ? round2(hours) : null;
-                          } else if (originalHours != null && (!updated.start && !updated.end)) {
-                            updated.hours = lunchChecked ? Math.max(0, round2(originalHours - 0.5)) : round2(originalHours);
-                          }
-
-                          return [...other, updated];
-                        });
-                      }}
-                      title={labels[lang].subtractLunchDesc}
-                    >
-                      {rawEntry?.lunch ?? true ? labels[lang].lunchOn : labels[lang].lunchOff}
-                    </button>
-
-                    <div className="lunch-desc">
-                      {labels[lang].subtractLunchDesc}
+                    <div className="lunch-minutes">
+                      <label className="lunch-minutes-label" htmlFor={`lunch-minutes-${dateStr}`}>
+                        {labels[lang].lunchMinutesLabel}
+                      </label>
+                      <input
+                        id={`lunch-minutes-${dateStr}`}
+                        className="cal-input lunch-minutes-input"
+                        type="number"
+                        min={0}
+                        max={180}
+                        step={5}
+                        value={getLunchMinutes(rawEntry)}
+                        onChange={e => handleLunchMinutesInput(dateStr, e.target.value)}
+                      />
                     </div>
                   </div>
 
