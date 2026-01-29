@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.1.3](https://github.com/lauming1111/work-to-buy/compare/v0.1.2...v0.1.3) (2026-01-01)
+
+### [0.1.2](https://github.com/lauming1111/work-to-buy/compare/v0.1.1...v0.1.2) (2026-01-01)
+
+
+### Features
+
+* add new job tab ([fdb23ed](https://github.com/lauming1111/work-to-buy/commit/fdb23edf15d6f09d130f7f9db133f5e9caf96373))
+* support lawful counting rules ([249e1dc](https://github.com/lauming1111/work-to-buy/commit/249e1dcd3c40693708ebd32da8529888b4765192))
+* update lunch time input field ([bc360f3](https://github.com/lauming1111/work-to-buy/commit/bc360f385954da59519d65ee22f71ebe56407935))
+
 ### 0.1.1 (2025-11-03)
 
 
