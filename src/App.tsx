@@ -20,6 +20,8 @@ type JobMeta = {
   name: string;
 };
 
+type PaymentCycle = "biweekly" | "semi-monthly" | "monthly";
+
 type DayHours = {
   date: string; // "YYYY-MM-DD"
   start?: string | null; // "HH:MM"
@@ -45,6 +47,7 @@ type JobExport = {
   dayHours: DayHours[];
   startDate: string;
   currentDate?: string;
+  payCycle?: PaymentCycle;
 };
 
 type AllJobsExport = {
@@ -61,6 +64,7 @@ type NormalizedJobData = {
   dayHours: DayHours[];
   startDate: string;
   currentDate: Date;
+  payCycle: PaymentCycle;
 };
 
 /* -------------------- Constants -------------------- */
@@ -80,6 +84,10 @@ const defaultItems: Item[] = [
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
+const parseYmdLocal = (dateStr: string) => {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+};
 
 const DEFAULT_JOB_ID = "default";
 const DEFAULT_JOB_NAME = "Main Job";
@@ -91,6 +99,7 @@ const LEGACY_STORAGE_KEYS = {
   dayHours: "w2b_history",
   startDate: "w2b_startDate",
   currentDate: "w2b_currentDate",
+  payCycle: "w2b_payCycle",
 } as const;
 
 const jobStorageKey = (jobId: string, key: keyof typeof LEGACY_STORAGE_KEYS) => `w2b_job_${jobId}_${key}`;
@@ -113,6 +122,7 @@ const createDefaultJobData = () => ({
   dayHours: [] as DayHours[],
   startDate: ymd(getTorontoToday()),
   currentDate: getTorontoToday(),
+  payCycle: "biweekly" as PaymentCycle,
 });
 
 const getInitialJobs = (): JobMeta[] => {
@@ -145,7 +155,11 @@ const loadJobData = (jobId: string) => {
   const currentDateRaw = readJobStorage(jobId, "currentDate");
   const currentDateCandidate = currentDateRaw ? new Date(currentDateRaw) : fallback.currentDate;
   const currentDate = isNaN(currentDateCandidate.getTime()) ? fallback.currentDate : currentDateCandidate;
-  return { items, hourlyRate, dayHours, startDate, currentDate };
+  const payCycleRaw = readJobStorage(jobId, "payCycle");
+  const payCycle = payCycleRaw === "biweekly" || payCycleRaw === "semi-monthly" || payCycleRaw === "monthly"
+    ? payCycleRaw
+    : fallback.payCycle;
+  return { items, hourlyRate, dayHours, startDate, currentDate, payCycle };
 };
 
 const clearJobStorage = (jobId: string) => {
@@ -169,6 +183,7 @@ export default function App(): JSX.Element {
   // persisted state
   const [items, setItems] = useState<Item[]>(initialJobData.items);
   const [hourlyRate, setHourlyRate] = useState<number>(initialJobData.hourlyRate);
+  const [payCycle, setPayCycle] = useState<PaymentCycle>(initialJobData.payCycle);
   const [dayHours, setDayHours] = useState<DayHours[]>(initialJobData.dayHours);
   const [startDate, setStartDate] = useState<string>(initialJobData.startDate);
   const [currentDate, setCurrentDate] = useState<Date>(initialJobData.currentDate);
@@ -187,6 +202,7 @@ export default function App(): JSX.Element {
   useEffect(() => localStorage.setItem(ACTIVE_JOB_STORAGE_KEY, activeJobId), [activeJobId]);
   useEffect(() => localStorage.setItem(jobStorageKey(activeJobId, "items"), JSON.stringify(items)), [items, activeJobId]);
   useEffect(() => localStorage.setItem(jobStorageKey(activeJobId, "hourlyRate"), String(hourlyRate)), [hourlyRate, activeJobId]);
+  useEffect(() => localStorage.setItem(jobStorageKey(activeJobId, "payCycle"), payCycle), [payCycle, activeJobId]);
   useEffect(() => localStorage.setItem(jobStorageKey(activeJobId, "dayHours"), JSON.stringify(dayHours)), [dayHours, activeJobId]);
   useEffect(() => localStorage.setItem(jobStorageKey(activeJobId, "startDate"), startDate), [startDate, activeJobId]);
   useEffect(() => localStorage.setItem(jobStorageKey(activeJobId, "currentDate"), currentDate.toISOString()), [currentDate, activeJobId]);
@@ -209,10 +225,41 @@ export default function App(): JSX.Element {
 
   const activeJob = jobs.find(job => job.id === activeJobId) || jobs[0];
   const useUnlawfulRule = (activeJob?.name ?? "").trim() === "3495";
+  const useSemiMonthlyRule = payCycle === "semi-monthly";
+  const useMonthlyRule = payCycle === "monthly";
+
+  const getSemiMonthlyInfo = (dateStr: string) => {
+    const dt = parseYmdLocal(dateStr);
+    const year = dt.getFullYear();
+    const month = dt.getMonth();
+    const day = dt.getDate();
+    const half = day <= 15 ? 0 : 1;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const startDay = half === 0 ? 1 : 16;
+    const endDay = half === 0 ? 15 : daysInMonth;
+    const mm = String(month + 1).padStart(2, "0");
+    const start = `${year}-${mm}-${String(startDay).padStart(2, "0")}`;
+    const end = `${year}-${mm}-${String(endDay).padStart(2, "0")}`;
+    const index = year * 24 + month * 2 + half;
+    return { index, start, end };
+  };
+
+  const getMonthlyInfo = (dateStr: string) => {
+    const dt = parseYmdLocal(dateStr);
+    const year = dt.getFullYear();
+    const month = dt.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const mm = String(month + 1).padStart(2, "0");
+    const start = `${year}-${mm}-01`;
+    const end = `${year}-${mm}-${String(daysInMonth).padStart(2, "0")}`;
+    const index = year * 12 + month;
+    return { index, start, end };
+  };
 
   const persistJobData = (jobId: string) => {
     localStorage.setItem(jobStorageKey(jobId, "items"), JSON.stringify(items));
     localStorage.setItem(jobStorageKey(jobId, "hourlyRate"), String(hourlyRate));
+    localStorage.setItem(jobStorageKey(jobId, "payCycle"), payCycle);
     localStorage.setItem(jobStorageKey(jobId, "dayHours"), JSON.stringify(dayHours));
     localStorage.setItem(jobStorageKey(jobId, "startDate"), startDate);
     localStorage.setItem(jobStorageKey(jobId, "currentDate"), currentDate.toISOString());
@@ -224,6 +271,7 @@ export default function App(): JSX.Element {
     const data = loadJobData(jobId);
     setItems(data.items);
     setHourlyRate(data.hourlyRate);
+    setPayCycle(data.payCycle);
     setDayHours(data.dayHours);
     setStartDate(data.startDate);
     setCurrentDate(data.currentDate);
@@ -243,6 +291,7 @@ export default function App(): JSX.Element {
     const data = createDefaultJobData();
     setItems(data.items);
     setHourlyRate(data.hourlyRate);
+    setPayCycle(data.payCycle);
     setDayHours(data.dayHours);
     setStartDate(data.startDate);
     setCurrentDate(data.currentDate);
@@ -265,6 +314,7 @@ export default function App(): JSX.Element {
       const data = loadJobData(nextActive);
       setItems(data.items);
       setHourlyRate(data.hourlyRate);
+      setPayCycle(data.payCycle);
       setDayHours(data.dayHours);
       setStartDate(data.startDate);
       setCurrentDate(data.currentDate);
@@ -275,8 +325,8 @@ export default function App(): JSX.Element {
 
   /* ---------------- helper indices ---------------- */
   const getIndexInfo = (dateStr: string, baseStart = startDate) => {
-    const start = new Date(baseStart);
-    const dt = new Date(dateStr);
+    const start = parseYmdLocal(baseStart);
+    const dt = parseYmdLocal(dateStr);
     const diffDays = Math.floor((dt.getTime() - start.getTime()) / (1000 * 3600 * 24));
     return {
       diffDays,
@@ -368,26 +418,41 @@ export default function App(): JSX.Element {
   const totalAfterTaxItemPrice = useMemo(() => round2(totalItemPrice + totalItemTax), [totalItemPrice, totalItemTax]);
   const progressPct = useMemo(() => (totalAfterTaxItemPrice > 0 ? Math.min(100, round2((totalEarnedAfterTax / totalAfterTaxItemPrice) * 100)) : 0), [totalAfterTaxItemPrice, totalEarnedAfterTax]);
 
-  // bi-weekly summary (hours / earnings / tax)
+  // pay-period summary (hours / earnings / tax)
   const biWeeklySummary = useMemo(() => {
-    // Group all entries by biWeekIndex
-    const map = new Map<number, { hours: number; earned: number; days: { date: string; hours: number; earnings: number; }[]; }>();
+    type SummaryDay = { date: string; hours: number; earnings: number; };
+    type SummaryBucket = { hours: number; earned: number; days: SummaryDay[]; start?: string; end?: string; };
+    type PeriodInfo = { index: number; start?: string; end?: string; };
+
+    const map = new Map<number, SummaryBucket>();
     detailedHistory.forEach(d => {
-      const { biWeekIndex } = getIndexInfo(d.date);
-      const cur = map.get(biWeekIndex) || { hours: 0, earned: 0, days: [] };
+      const periodInfo: PeriodInfo = useMonthlyRule
+        ? getMonthlyInfo(d.date)
+        : useSemiMonthlyRule
+          ? getSemiMonthlyInfo(d.date)
+          : { index: getIndexInfo(d.date).biWeekIndex };
+      const key = periodInfo.index;
+      const emptyBucket: SummaryBucket = { hours: 0, earned: 0, days: [], start: periodInfo.start, end: periodInfo.end };
+      const cur = map.get(key) || emptyBucket;
+      if (useSemiMonthlyRule || useMonthlyRule) {
+        cur.start = periodInfo.start;
+        cur.end = periodInfo.end;
+      }
       cur.hours += d.hours;
       cur.earned += d.earnings;
       cur.days.push({ date: d.date, hours: d.hours, earnings: d.earnings });
-      map.set(biWeekIndex, cur);
+      map.set(key, cur);
     });
 
-    return Array.from(map.entries()).map(([idx, val]) => ({
-      index: idx + 1,
+    return Array.from(map.entries()).map(([idx, val], i) => ({
+      index: (useSemiMonthlyRule || useMonthlyRule) ? i + 1 : idx + 1,
       hours: val.hours,
       earned: val.earned,
       days: val.days,
+      start: val.start,
+      end: val.end,
     }));
-  }, [detailedHistory, hourlyRate, startDate]);
+  }, [detailedHistory, hourlyRate, startDate, useSemiMonthlyRule, useMonthlyRule]);
 
   /* ---------------- UI helpers ---------------- */
   const handleHourInput = (date: string, raw: string) => {
@@ -512,12 +577,15 @@ export default function App(): JSX.Element {
     const startDate = raw && typeof raw.startDate === "string" && raw.startDate ? raw.startDate : fallback.startDate;
     const currentDateCandidate = raw && raw.currentDate ? new Date(raw.currentDate) : fallback.currentDate;
     const currentDate = isNaN(currentDateCandidate.getTime()) ? fallback.currentDate : currentDateCandidate;
-    return { items, hourlyRate, dayHours, startDate, currentDate };
+    const payCycle = raw && (raw.payCycle === "biweekly" || raw.payCycle === "semi-monthly" || raw.payCycle === "monthly")
+      ? raw.payCycle
+      : fallback.payCycle;
+    return { items, hourlyRate, dayHours, startDate, currentDate, payCycle };
   };
 
   const buildJobExport = (jobId: string): JobExport => {
     const data = jobId === activeJobId
-      ? { items, hourlyRate, dayHours, startDate, currentDate }
+      ? { items, hourlyRate, dayHours, startDate, currentDate, payCycle }
       : loadJobData(jobId);
     return {
       items: data.items,
@@ -525,6 +593,7 @@ export default function App(): JSX.Element {
       dayHours: data.dayHours,
       startDate: data.startDate,
       currentDate: data.currentDate.toISOString(),
+      payCycle: data.payCycle,
     };
   };
 
@@ -535,6 +604,7 @@ export default function App(): JSX.Element {
       hourlyRate,
       startDate,
       dayHours,
+      payCycle,
     };
     const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -581,6 +651,7 @@ export default function App(): JSX.Element {
       const normalized = normalizeJobData(jobDataMap[job.id]);
       localStorage.setItem(jobStorageKey(job.id, "items"), JSON.stringify(normalized.items));
       localStorage.setItem(jobStorageKey(job.id, "hourlyRate"), String(normalized.hourlyRate));
+      localStorage.setItem(jobStorageKey(job.id, "payCycle"), normalized.payCycle);
       localStorage.setItem(jobStorageKey(job.id, "dayHours"), JSON.stringify(normalized.dayHours));
       localStorage.setItem(jobStorageKey(job.id, "startDate"), normalized.startDate);
       localStorage.setItem(jobStorageKey(job.id, "currentDate"), normalized.currentDate.toISOString());
@@ -595,6 +666,7 @@ export default function App(): JSX.Element {
     setActiveJobId(nextActive);
     setItems(activeData.items);
     setHourlyRate(activeData.hourlyRate);
+    setPayCycle(activeData.payCycle);
     setDayHours(activeData.dayHours);
     setStartDate(activeData.startDate);
     setCurrentDate(activeData.currentDate);
@@ -614,6 +686,7 @@ export default function App(): JSX.Element {
         }
         if (parsed.items) setItems(parsed.items);
         if (parsed.hourlyRate) setHourlyRate(Number(parsed.hourlyRate));
+        if (parsed.payCycle && (parsed.payCycle === "biweekly" || parsed.payCycle === "semi-monthly" || parsed.payCycle === "monthly")) setPayCycle(parsed.payCycle);
         if (parsed.startDate) setStartDate(parsed.startDate);
         if (parsed.dayHours) setDayHours(parsed.dayHours);
         notify(labels[lang].imported);
@@ -639,6 +712,7 @@ export default function App(): JSX.Element {
     setItems(cloneDefaultItems());
     setDayHours([]);
     setHourlyRate(17.6);
+    setPayCycle("biweekly");
     setStartDate(ymd(getTorontoToday()));
     setCurrentDate(getTorontoToday());
     setDarkMode(false);
@@ -686,6 +760,7 @@ export default function App(): JSX.Element {
       itemList: "Item List",
       hourlyRate: "Hourly Rate",
       startDate: "Start Date",
+      payCycle: "Pay Cycle",
       export: "Export Data",
       exportAll: "Export All Jobs",
       import: "Import Data",
@@ -740,6 +815,7 @@ export default function App(): JSX.Element {
       itemList: "項目清單",
       hourlyRate: "時薪",
       startDate: "開始日期",
+      payCycle: "????",
       export: "匯出資料",
       exportAll: "Export All Jobs",
       job: "Job",
@@ -860,6 +936,15 @@ export default function App(): JSX.Element {
             <input className="control-input" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
           </div>
 
+          <div>
+            <label className="small-label">{labels[lang].payCycle}</label>
+            <select className="control-input" value={payCycle} onChange={e => setPayCycle(e.target.value as PaymentCycle)} >
+              <option value="biweekly">Bi-weekly</option>
+              <option value="semi-monthly">Semi-monthly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </div>
+
           <div style={{ marginTop: 25, display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button className="btn" onClick={autoFillWeekdays}>{labels[lang].autoFill}</button>
             <button className="btn warn" onClick={resetMonthHours}>{labels[lang].reset}</button>
@@ -932,7 +1017,12 @@ export default function App(): JSX.Element {
               const isStart = dateStr === startDate;
 
               const { biWeekIndex } = getIndexInfo(dateStr);
-              const bgColor = BIWEEK_COLORS[biWeekIndex % BIWEEK_COLORS.length];
+              const periodIndex = useMonthlyRule
+                ? getMonthlyInfo(dateStr).index
+                : useSemiMonthlyRule
+                  ? getSemiMonthlyInfo(dateStr).index
+                  : biWeekIndex;
+              const bgColor = BIWEEK_COLORS[periodIndex % BIWEEK_COLORS.length];
 
               return (
                 <div key={idx} className={`cal-cell ${isToday ? "today" : ""} ${isStart ? "start" : ""}`} style={{
@@ -1062,7 +1152,7 @@ export default function App(): JSX.Element {
         </div>
 
         <div className="card biweekly-card" style={{ width: "100%", minWidth: 220, marginTop: 16 }}>
-          <h3>Bi-weekly Summary</h3>
+          <h3>{useMonthlyRule ? "Monthly Summary" : useSemiMonthlyRule ? "Pay Period Summary" : "Bi-weekly Summary"}</h3>
           <table className="items-table">
             <thead>
               <tr>
@@ -1082,7 +1172,9 @@ export default function App(): JSX.Element {
               {biWeeklySummary.length === 0 && <tr><td colSpan={10} style={{ textAlign: "center" }}>No data</td></tr>}
               {biWeeklySummary.map((b, i) => {
                 const periodDays = b.days || [];
-                const periodDates = periodDays.length > 0 ? `${periodDays[0].date} ~ ${periodDays[periodDays.length - 1].date}` : "";
+                const periodDates = (useSemiMonthlyRule || useMonthlyRule) && b.start && b.end
+                  ? `${b.start} ~ ${b.end}`
+                  : (periodDays.length > 0 ? `${periodDays[0].date} ~ ${periodDays[periodDays.length - 1].date}` : "");
                 const periodDetails = detailedHistory.filter(d => periodDays.some(day => day.date === d.date));
                 const hours = periodDetails.reduce((sum, d) => sum + d.hours, 0);
 
