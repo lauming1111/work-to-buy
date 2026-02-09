@@ -1,14 +1,14 @@
 {
   "files": {
-    "main.css": "/work-to-buy/static/css/main.1c502a30.css",
-    "main.js": "/work-to-buy/static/js/main.995f34a9.js",
+    "main.css": "/work-to-buy/static/css/main.86a7d1b1.css",
+    "main.js": "/work-to-buy/static/js/main.7d033a1f.js",
     "static/media/rick-y-morty-rick.png": "/work-to-buy/static/media/rick-y-morty-rick.a6e981671f7d6b475ec1.png",
     "index.html": "/work-to-buy/index.html",
-    "main.1c502a30.css.map": "/work-to-buy/static/css/main.1c502a30.css.map",
-    "main.995f34a9.js.map": "/work-to-buy/static/js/main.995f34a9.js.map"
+    "main.86a7d1b1.css.map": "/work-to-buy/static/css/main.86a7d1b1.css.map",
+    "main.7d033a1f.js.map": "/work-to-buy/static/js/main.7d033a1f.js.map"
   },
   "entrypoints": [
-    "static/css/main.1c502a30.css",
-    "static/js/main.995f34a9.js"
+    "static/css/main.86a7d1b1.css",
+    "static/js/main.7d033a1f.js"
   ]
 }
