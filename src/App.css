@@ -14,9 +14,10 @@
 /* container background changes via class on root element */
 .big-container {
   font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-  margin: 18px auto;
-  max-width: 1200px;
-  padding: 5px;
+  margin: 12px auto;
+  max-width: 1800px;
+  width: calc(100% - 24px);
+  padding: 12px;
   border-radius: 14px;
   transition: background 0.25s, color 0.25s, border 0.25s;
   display: flex;
@@ -137,6 +138,20 @@
 .btn.sm{padding:6px 8px}
 .btn.export{background:linear-gradient(135deg,#6366f1,#8b5cf6)}
 
+/* file inputs: keep clickable on mobile while visually hidden */
+.file-upload-btn {
+  position: relative;
+  overflow: hidden;
+}
+.file-input-hidden {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
 /* job tabs */
 .job-tabs {
   display: flex;
@@ -153,7 +168,10 @@
 .job-tabs-scroll {
   display: flex;
   gap: 8px;
-  overflow-x: auto;
+  overflow-x: visible;
+  justify-items: stretch;
+  justify-content: stretch;
+  align-content: stretch;
   flex: 1;
   padding-bottom: 4px;
 }
@@ -228,7 +246,7 @@
 .cal-head-cell { background:transparent; text-align:center; font-weight:700; color:var(--muted) }
 
 /* default grid for desktop */
-.cal-grid { display:grid; grid-template-columns: repeat(7, minmax(110px, 1fr)); gap:10px }
+.cal-grid { display:grid; grid-template-columns: repeat(7, minmax(140px, 1fr)); gap:10px }
 .cal-cell {
   padding:10px;
   border-radius:10px;
@@ -254,6 +272,24 @@
 }
 .big-container.light .cal-input { background:#f8fafc; color:var(--text-dark) }
 .cal-earn { margin-top:auto; color:var(--muted); font-size:12px }
+
+/* Antd TimePicker alignment */
+.cal-input.ant-picker {
+  min-height: 30px;
+  padding: 2px 6px;
+  background: transparent;
+  box-shadow: none;
+}
+.big-container.light .cal-input.ant-picker {
+  background: #f8fafc;
+}
+.cal-input.ant-picker .ant-picker-input > input {
+  text-align: center;
+  font-size: 13px;
+}
+.cal-input.ant-picker .ant-picker-suffix {
+  color: var(--muted);
+}
 
 /* today vs start styles */
 .cal-cell.today { outline:3px solid rgba(40, 200, 118, 0.35); box-shadow:inset 0 1px 0 rgba(255,255,255,0.02) }
@@ -309,6 +345,15 @@
   font-size:12px;
 }
 
+.modal-close-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1;
+}
+
 /* responsiveness: mobile & iPhone 14 Pro */
 @media (max-width:900px){
   .info-grid { grid-template-columns: 1fr }
@@ -347,15 +392,19 @@
 /* Responsive calendar grid */
 .cal-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(44px, 1fr));
+  grid-template-columns: repeat(7, minmax(140px, 1fr));
   gap: 10px;
   width: 100%;
   box-sizing: border-box;
-  overflow-x: auto;
+  overflow-x: visible;
+  justify-items: stretch;
+  justify-content: stretch;
+  align-content: stretch;
+  flex: 1;
   /* On mobile, allow horizontal scroll if needed */
 }
 
-@media (max-width: 700px) {
+@media (max-width: 640px) {
   .calendar-card {
     min-width: 0 !important;
     width: 100% !important;
@@ -365,7 +414,10 @@
     grid-template-columns: repeat(7, minmax(48px, 1fr));
     gap: 6px;
     font-size: 16px;
-    overflow-x: auto;
+    overflow-x: visible;
+  justify-items: stretch;
+  justify-content: stretch;
+  align-content: stretch;
   }
   .cal-cell {
     min-width: 48px;
@@ -411,7 +463,7 @@
 /* Desktop: wider cells */
 @media (min-width: 701px) {
   .cal-grid {
-    grid-template-columns: repeat(7, minmax(70px, 1fr));
+    grid-template-columns: repeat(7, minmax(140px, 1fr));
     gap: 10px;
   }
   .cal-cell {
@@ -433,17 +485,22 @@
 
 /* Always allow horizontal scroll if needed */
 .calendar-card {
-  overflow-x: auto;
+  overflow-x: visible;
+  justify-items: stretch;
+  justify-content: stretch;
+  align-content: stretch;
 }
 
 /* Make sure calendar header is also responsive */
 .calendar-header {
   flex-wrap: wrap;
   gap: 8px;
+  width: 100%;
 }
 
 .cal-head {
   margin-bottom: 8px;
+  width: 100%;
 }
 .cal-head-cell {
   background: transparent;
@@ -454,33 +511,222 @@
   padding: 2px 0;
 }
 
+.calendar-summary-scroll {
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
 .calendar-summary-wrap {
   display: flex;
   gap: 16px;
-  flex-wrap: wrap;
+  align-items: flex-start;
+  min-width: 1320px;
 }
 
-@media (max-width: 700px) {
+.calendar-summary-wrap .card {
+  margin: 0;
+}
+
+.calendar-card {
+  min-width: 980px;
+  width: 980px;
+  max-width: none;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  overflow-x: auto;
+}
+
+.roster-card {
+  width: 320px;
+  min-width: 320px;
+  max-width: 320px;
+  align-self: flex-start;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.biweekly-card {
+  width: 100%;
+}
+
+.roster-list {
+  --roster-rows: 5;
+  --roster-row-min: 110px;
+  --roster-gap: 10px;
+  display: grid;
+  grid-template-rows: repeat(var(--roster-rows), minmax(var(--roster-row-min), 1fr));
+  gap: var(--roster-gap);
+  overflow-y: auto;
+}
+
+.roster-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: var(--roster-row-min);
+  position: relative;
+}
+
+.roster-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.roster-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: nowrap;
+  margin-top: auto;
+  width: 100%;
+}
+
+.roster-actions-buttons {
+  display: flex;
+  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  width: 100%;
+}
+
+.roster-preview {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f8fafc;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.roster-preview img {
+  width: 100%;
+  height: 140px;
+  object-fit: contain;
+  display: block;
+  background: #fff;
+}
+
+.roster-remove-x {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #ff5c7c;
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.roster-actions .btn,
+.roster-actions .file-upload-btn {
+  padding: 4px 6px;
+  border-radius: 7px;
+  font-size: 0.78rem;
+  width: 100%;
+  text-align: center;
+}
+
+.roster-actions .file-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+.roster-thumb {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #f8fafc;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.roster-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+@media (max-width: 900px) {
+  .roster-list {
+    --roster-row-min: 90px;
+    --roster-gap: 6px;
+  }
+}
+
+@media (max-width: 900px) {
   .calendar-summary-wrap {
     flex-direction: column;
-    gap: 0;
+    min-width: 0;
+    width: 100%;
   }
-  .calendar-card,
-  .biweekly-card {
-    width: 100% !important;
-    min-width: 0 !important;
-    margin-bottom: 12px;
+  .calendar-card {
+    order: 1;
+    min-width: 0;
+    width: 100%;
+  }
+  .roster-card {
+    order: 2;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .calendar-summary-scroll {
+    overflow-x: hidden;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .cal-grid,
+  .cal-head {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+  .cal-cell {
+    min-width: 0;
   }
 }
 
+
 @media (max-width: 600px) {
-  .calendar-card, .biweekly-card {
-    min-width: unset !important;
-    width: 100% !important;
+  .cal-cell .lunch-minutes-input {
+    width: 64px;
+    max-width: 64px;
+    font-size: 14px;
   }
   .calendar-summary-wrap {
-    flex-direction: column !important;
-    gap: 0 !important;
+    overflow-x: auto;
+  }
+  .calendar-card, .biweekly-card, .roster-card {
+    min-width: unset !important;
+    width: 100% !important;
   }
   .cal-grid {
     font-size: 14px;
@@ -574,7 +820,10 @@
     max-width: 50px !important;
   }
   .items-scroll {
-    overflow-x: auto;
+    overflow-x: visible;
+  justify-items: stretch;
+  justify-content: stretch;
+  align-content: stretch;
     width: 100%;
   }
 }
@@ -592,20 +841,60 @@
   flex-direction: column;
   align-items: center;
   gap: 4px;
+  width: 100%;
+  margin-top: 4px;
 }
 
 .cal-cell .lunch-minutes-label {
   font-size: 11px;
   color: var(--muted);
+  white-space: normal;
+  text-align: center;
+  line-height: 1.1;
 }
 
 .cal-cell .lunch-minutes-input {
-  max-width: 80px;
+  width: 64px;
+  max-width: 64px;
+  height: 24px;
   text-align: center;
+  margin: 0 auto;
+  display: block;
+  padding: 2px 4px;
+  font-size: 12px;
+  line-height: 1.2;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  box-sizing: border-box;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.cal-cell .lunch-minutes-input::-webkit-outer-spin-button,
+.cal-cell .lunch-minutes-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+@media (max-width: 600px) {
+  .cal-cell .lunch-minutes-label {
+    font-size: 10px;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.1;
+  }
+  .cal-cell .lunch-minutes-input {
+    width: 52px;
+    max-width: 52px;
+    height: 24px;
+    font-size: 11px;
+  }
 }
 
 /* ensure biweekly table responsive on mobile */
-@media (max-width: 700px) {
+@media (max-width: 640px) {
   .biweekly-card { overflow-x: auto; padding: 8px; }
   .biweekly-card table { min-width: 720px; width: max-content; }
 }
@@ -633,7 +922,10 @@ html.dark {
 .calendar-header {
   width: 100%;
   box-sizing: border-box;
-  overflow-x: auto;
+  overflow-x: visible;
+  justify-items: stretch;
+  justify-content: stretch;
+  align-content: stretch;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -642,6 +934,14 @@ html.dark {
 
 .calendar-header > div {
   flex-wrap: wrap;
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  justify-content: center;
+  align-items: center;
+}
+
+.calendar-nav {
   display: flex;
   gap: 8px;
   width: 100%;
@@ -659,16 +959,38 @@ html.dark {
 }
 
 /* On small screens, stack or shrink buttons and title */
-@media (max-width: 600px) {
+@media (max-width: 900px) {
   .calendar-header {
     padding: 2px 0;
+    height: auto !important;
+    align-items: stretch;
   }
-  .calendar-header > div {
-    gap: 4px;
+  .calendar-header > .calendar-nav {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "prev next"
+      "title title";
+    gap: 6px;
+    align-items: center;
+    width: 100%;
   }
-  .month-title {
+  .calendar-prev {
+    grid-area: prev;
+    width: 100%;
+    min-width: 0;
+  }
+  .calendar-next {
+    grid-area: next;
+    width: 100%;
+    min-width: 0;
+  }
+  .calendar-header > .calendar-nav .month-title {
+    grid-area: title;
     font-size: 1em;
     min-width: 60px;
+    width: 100%;
+    text-align: center;
   }
   .btn.small {
     font-size: 13px;
@@ -693,6 +1015,18 @@ html.dark {
   margin-top: 0;
 }
 
+.header-actions .header-btn {
+  min-width: 90px;
+  height: 28px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1;
+  font-size: 0.85rem;
+}
+
 /* Mobile: stack calendar header vertically */
 @media (max-width: 600px) {
   .calendar-header {
@@ -708,9 +1042,12 @@ html.dark {
 }
 
 /* Make biweekly summary table horizontally scrollable on mobile */
-@media (max-width: 700px) {
+@media (max-width: 640px) {
   .biweekly-card {
-    overflow-x: auto;
+    overflow-x: visible;
+  justify-items: stretch;
+  justify-content: stretch;
+  align-content: stretch;
     width: 100% !important;
     min-width: 0 !important;
     padding: 0 2px;
@@ -724,5 +1061,17 @@ html.dark {
     padding: 6px 4px;
     font-size: 13px;
     white-space: nowrap;
+  }
+}
+
+/* Force horizontal scroll for pay period summary on small screens */
+@media (max-width: 900px) {
+  .biweekly-card {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .biweekly-card .items-table {
+    min-width: 900px;
+    width: max-content;
   }
 }

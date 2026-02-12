@@ -1,4 +1,4 @@
-import React, { JSX, useEffect, useMemo, useState } from "react";
+﻿import React, { JSX, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import dayjs, { Dayjs } from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
@@ -21,6 +21,11 @@ type JobMeta = {
 };
 
 type PaymentCycle = "biweekly" | "semi-monthly" | "monthly";
+
+type RosterData = {
+  weekly: Record<string, string>;
+  monthly: Record<string, string>;
+};
 
 type DayHours = {
   date: string; // "YYYY-MM-DD"
@@ -49,6 +54,7 @@ type JobExport = {
   startDate: string;
   currentDate?: string;
   payCycle?: PaymentCycle;
+  roster?: RosterData;
 };
 
 type AllJobsExport = {
@@ -66,6 +72,7 @@ type NormalizedJobData = {
   startDate: string;
   currentDate: Date;
   payCycle: PaymentCycle;
+  roster: RosterData;
 };
 
 /* -------------------- Constants -------------------- */
@@ -122,6 +129,7 @@ const LEGACY_STORAGE_KEYS = {
   startDate: "w2b_startDate",
   currentDate: "w2b_currentDate",
   payCycle: "w2b_payCycle",
+  roster: "w2b_roster",
 } as const;
 
 const jobStorageKey = (jobId: string, key: keyof typeof LEGACY_STORAGE_KEYS) => `w2b_job_${jobId}_${key}`;
@@ -136,6 +144,15 @@ const safeParse = <T,>(raw: string | null, fallback: T): T => {
   }
 };
 
+const safeSetItem = (key: string, value: string) => {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const cloneDefaultItems = () => defaultItems.map(item => ({ ...item }));
 
 const createDefaultJobData = () => ({
@@ -145,6 +162,7 @@ const createDefaultJobData = () => ({
   startDate: ymd(getTorontoToday()),
   currentDate: getTorontoToday(),
   payCycle: "biweekly" as PaymentCycle,
+  roster: { weekly: {}, monthly: {} },
 });
 
 const getInitialJobs = (): JobMeta[] => {
@@ -181,7 +199,8 @@ const loadJobData = (jobId: string) => {
   const payCycle = payCycleRaw === "biweekly" || payCycleRaw === "semi-monthly" || payCycleRaw === "monthly"
     ? payCycleRaw
     : fallback.payCycle;
-  return { items, hourlyRate, dayHours, startDate, currentDate, payCycle };
+  const roster = safeParse<RosterData>(readJobStorage(jobId, "roster"), fallback.roster);
+  return { items, hourlyRate, dayHours, startDate, currentDate, payCycle, roster };
 };
 
 const clearJobStorage = (jobId: string) => {
@@ -206,6 +225,7 @@ export default function App(): JSX.Element {
   const [items, setItems] = useState<Item[]>(initialJobData.items);
   const [hourlyRate, setHourlyRate] = useState<number>(initialJobData.hourlyRate);
   const [payCycle, setPayCycle] = useState<PaymentCycle>(initialJobData.payCycle);
+  const [roster, setRoster] = useState<RosterData>(initialJobData.roster);
   const [dayHours, setDayHours] = useState<DayHours[]>(initialJobData.dayHours);
   const [startDate, setStartDate] = useState<string>(initialJobData.startDate);
   const [currentDate, setCurrentDate] = useState<Date>(initialJobData.currentDate);
@@ -219,16 +239,19 @@ export default function App(): JSX.Element {
   const [notification, setNotification] = useState<string>("");
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const calGridRef = useRef<HTMLDivElement | null>(null);
+  const [weekRowTemplate, setWeekRowTemplate] = useState<string | null>(null);
   // persist on change
-  useEffect(() => localStorage.setItem(JOBS_STORAGE_KEY, JSON.stringify(jobs)), [jobs]);
-  useEffect(() => localStorage.setItem(ACTIVE_JOB_STORAGE_KEY, activeJobId), [activeJobId]);
-  useEffect(() => localStorage.setItem(jobStorageKey(activeJobId, "items"), JSON.stringify(items)), [items, activeJobId]);
-  useEffect(() => localStorage.setItem(jobStorageKey(activeJobId, "hourlyRate"), String(hourlyRate)), [hourlyRate, activeJobId]);
-  useEffect(() => localStorage.setItem(jobStorageKey(activeJobId, "payCycle"), payCycle), [payCycle, activeJobId]);
-  useEffect(() => localStorage.setItem(jobStorageKey(activeJobId, "dayHours"), JSON.stringify(dayHours)), [dayHours, activeJobId]);
-  useEffect(() => localStorage.setItem(jobStorageKey(activeJobId, "startDate"), startDate), [startDate, activeJobId]);
-  useEffect(() => localStorage.setItem(jobStorageKey(activeJobId, "currentDate"), currentDate.toISOString()), [currentDate, activeJobId]);
-  useEffect(() => localStorage.setItem("w2b_dark", darkMode ? "1" : "0"), [darkMode]);
+  useEffect(() => { safeSetItem(JOBS_STORAGE_KEY, JSON.stringify(jobs)); }, [jobs]);
+  useEffect(() => { safeSetItem(ACTIVE_JOB_STORAGE_KEY, activeJobId); }, [activeJobId]);
+  useEffect(() => { safeSetItem(jobStorageKey(activeJobId, "items"), JSON.stringify(items)); }, [items, activeJobId]);
+  useEffect(() => { safeSetItem(jobStorageKey(activeJobId, "hourlyRate"), String(hourlyRate)); }, [hourlyRate, activeJobId]);
+  useEffect(() => { safeSetItem(jobStorageKey(activeJobId, "payCycle"), payCycle); }, [payCycle, activeJobId]);
+  useEffect(() => { safeSetItem(jobStorageKey(activeJobId, "roster"), JSON.stringify(roster)); }, [roster, activeJobId]);
+  useEffect(() => { safeSetItem(jobStorageKey(activeJobId, "dayHours"), JSON.stringify(dayHours)); }, [dayHours, activeJobId]);
+  useEffect(() => { safeSetItem(jobStorageKey(activeJobId, "startDate"), startDate); }, [startDate, activeJobId]);
+  useEffect(() => { safeSetItem(jobStorageKey(activeJobId, "currentDate"), currentDate.toISOString()); }, [currentDate, activeJobId]);
+  useEffect(() => { safeSetItem("w2b_dark", darkMode ? "1" : "0"); }, [darkMode]);
 
   useEffect(() => {
     if (darkMode) {
@@ -249,6 +272,149 @@ export default function App(): JSX.Element {
   const useUnlawfulRule = (activeJob?.name ?? "").trim() === "3495";
   const useSemiMonthlyRule = payCycle === "semi-monthly";
   const useMonthlyRule = payCycle === "monthly";
+
+  const [rosterMode, setRosterMode] = useState<"weekly" | "monthly">("weekly");
+  const [rosterViewer, setRosterViewer] = useState<{ src: string; scale: number } | null>(null);
+  const [rosterConfirm, setRosterConfirm] = useState<{ mode: "weekly" | "monthly"; key: string } | null>(null);
+  const getWeekInfo = (base: Date) => {
+    const start = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+    start.setHours(0, 0, 0, 0);
+    const day = start.getDay();
+    start.setDate(start.getDate() - day);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    return {
+      key: ymd(start),
+      start: ymd(start),
+      end: ymd(end),
+    };
+  };
+
+  const getMonthInfoFromDate = (base: Date) => {
+    const year = base.getFullYear();
+    const month = base.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const mm = String(month + 1).padStart(2, "0");
+    const start = `${year}-${mm}-01`;
+    const end = `${year}-${mm}-${String(daysInMonth).padStart(2, "0")}`;
+    return {
+      key: `${year}-${mm}`,
+      start,
+      end,
+    };
+  };
+
+  const monthlyRosterPeriod = useMemo(() => getMonthInfoFromDate(currentDate), [currentDate]);
+
+  const weeklyRosterPeriods = useMemo(() => {
+    if (rosterMode !== "weekly") return [] as { key: string; start: string; end: string; }[];
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const monthStart = new Date(year, month, 1);
+    const firstWeekday = monthStart.getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const totalCells = firstWeekday + daysInMonth;
+    const rows = Math.ceil(totalCells / 7);
+    const gridStart = new Date(year, month, 1 - firstWeekday);
+    const periods: { key: string; start: string; end: string; }[] = [];
+    for (let i = 0; i < rows; i += 1) {
+      const weekStart = new Date(gridStart);
+      weekStart.setDate(gridStart.getDate() + i * 7);
+      periods.push(getWeekInfo(weekStart));
+    }
+    return periods;
+  }, [rosterMode, currentDate]);
+
+  const getRosterImage = (mode: "weekly" | "monthly", key: string) => roster[mode]?.[key];
+
+  const readFileAsDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+
+  const loadImage = (src: string) => new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+
+  const compressImageDataUrl = async (dataUrl: string, quality = 0.75, maxDimension = 1280) => {
+    const img = await loadImage(dataUrl);
+    const canvas = document.createElement("canvas");
+    const width = img.naturalWidth || img.width;
+    const height = img.naturalHeight || img.height;
+    const scale = Math.min(1, maxDimension / Math.max(width, height));
+    const targetWidth = Math.max(1, Math.round(width * scale));
+    const targetHeight = Math.max(1, Math.round(height * scale));
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return dataUrl;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+    let compressed = canvas.toDataURL("image/webp", quality);
+    if (!compressed.startsWith("data:image/webp")) {
+      compressed = canvas.toDataURL("image/jpeg", quality);
+    }
+    return compressed;
+  };
+
+  const handleRosterFile = async (ev: React.ChangeEvent<HTMLInputElement>, mode: "weekly" | "monthly", key: string) => {
+    const file = ev.target.files?.[0];
+    const input = ev.currentTarget;
+    if (!file) return;
+    try {
+      const originalDataUrl = await readFileAsDataUrl(file);
+      const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      const compressedDataUrl = await compressImageDataUrl(
+        originalDataUrl,
+        isMobile ? 0.7 : 0.8,
+        isMobile ? 1024 : 1600
+      );
+      setRoster(prev => ({
+        ...prev,
+        [mode]: {
+          ...(prev[mode] || {}),
+          [key]: compressedDataUrl,
+        },
+      }));
+    } catch {
+      try {
+        const fallbackDataUrl = await readFileAsDataUrl(file);
+        setRoster(prev => ({
+          ...prev,
+          [mode]: {
+            ...(prev[mode] || {}),
+            [key]: fallbackDataUrl,
+          },
+        }));
+      } catch {
+        // ignore
+      }
+    } finally {
+      input.value = "";
+    }
+  };
+
+  const clearRosterImage = (mode: "weekly" | "monthly", key: string) => {
+    setRoster(prev => {
+      const next = { ...prev, [mode]: { ...(prev[mode] || {}) } };
+      delete next[mode][key];
+      return next;
+    });
+  };
+
+  const zoomInRoster = () => {
+    setRosterViewer(prev => {
+      if (!prev) return prev;
+      const nextScale = Math.min(3, Math.round((prev.scale + 0.1) * 100) / 100);
+      return { ...prev, scale: nextScale };
+    });
+  };
 
   const getSemiMonthlyInfo = (dateStr: string) => {
     const dt = parseYmdLocal(dateStr);
@@ -279,12 +445,13 @@ export default function App(): JSX.Element {
   };
 
   const persistJobData = (jobId: string) => {
-    localStorage.setItem(jobStorageKey(jobId, "items"), JSON.stringify(items));
-    localStorage.setItem(jobStorageKey(jobId, "hourlyRate"), String(hourlyRate));
-    localStorage.setItem(jobStorageKey(jobId, "payCycle"), payCycle);
-    localStorage.setItem(jobStorageKey(jobId, "dayHours"), JSON.stringify(dayHours));
-    localStorage.setItem(jobStorageKey(jobId, "startDate"), startDate);
-    localStorage.setItem(jobStorageKey(jobId, "currentDate"), currentDate.toISOString());
+    safeSetItem(jobStorageKey(jobId, "items"), JSON.stringify(items));
+    safeSetItem(jobStorageKey(jobId, "hourlyRate"), String(hourlyRate));
+    safeSetItem(jobStorageKey(jobId, "payCycle"), payCycle);
+    safeSetItem(jobStorageKey(jobId, "roster"), JSON.stringify(roster));
+    safeSetItem(jobStorageKey(jobId, "dayHours"), JSON.stringify(dayHours));
+    safeSetItem(jobStorageKey(jobId, "startDate"), startDate);
+    safeSetItem(jobStorageKey(jobId, "currentDate"), currentDate.toISOString());
   };
 
   const switchJob = (jobId: string) => {
@@ -294,6 +461,7 @@ export default function App(): JSX.Element {
     setItems(data.items);
     setHourlyRate(data.hourlyRate);
     setPayCycle(data.payCycle);
+    setRoster(data.roster);
     setDayHours(data.dayHours);
     setStartDate(data.startDate);
     setCurrentDate(data.currentDate);
@@ -314,6 +482,7 @@ export default function App(): JSX.Element {
     setItems(data.items);
     setHourlyRate(data.hourlyRate);
     setPayCycle(data.payCycle);
+    setRoster(data.roster);
     setDayHours(data.dayHours);
     setStartDate(data.startDate);
     setCurrentDate(data.currentDate);
@@ -337,6 +506,7 @@ export default function App(): JSX.Element {
       setItems(data.items);
       setHourlyRate(data.hourlyRate);
       setPayCycle(data.payCycle);
+      setRoster(data.roster);
       setDayHours(data.dayHours);
       setStartDate(data.startDate);
       setCurrentDate(data.currentDate);
@@ -530,8 +700,19 @@ export default function App(): JSX.Element {
   };
 
   const handleLunchMinutesInput = (date: string, raw: string) => {
-    const parsed = Number(raw);
-    const lunchMinutes = clampLunchMinutes(Number.isFinite(parsed) ? parsed : DEFAULT_LUNCH_MINUTES);
+    const trimmed = raw.trim();
+    if (trimmed === "") {
+      setDayHours(prev => {
+        const other = prev.filter(p => p.date !== date);
+        const existing = prev.find(p => p.date === date) || { date };
+        const updated: DayHours = { ...existing, lunchMinutes: null };
+        return [...other, updated];
+      });
+      return;
+    }
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed)) return;
+    const lunchMinutes = clampLunchMinutes(parsed);
     setDayHours(prev => {
       const other = prev.filter(p => p.date !== date);
       const existing = prev.find(p => p.date === date) || { date };
@@ -628,12 +809,18 @@ export default function App(): JSX.Element {
     const payCycle = raw && (raw.payCycle === "biweekly" || raw.payCycle === "semi-monthly" || raw.payCycle === "monthly")
       ? raw.payCycle
       : fallback.payCycle;
-    return { items, hourlyRate, dayHours, startDate, currentDate, payCycle };
+    const roster = raw && raw.roster && typeof raw.roster === "object"
+      ? {
+          weekly: (raw.roster as any).weekly && typeof (raw.roster as any).weekly === "object" ? (raw.roster as any).weekly : {},
+          monthly: (raw.roster as any).monthly && typeof (raw.roster as any).monthly === "object" ? (raw.roster as any).monthly : {},
+        }
+      : fallback.roster;
+    return { items, hourlyRate, dayHours, startDate, currentDate, payCycle, roster };
   };
 
   const buildJobExport = (jobId: string): JobExport => {
     const data = jobId === activeJobId
-      ? { items, hourlyRate, dayHours, startDate, currentDate, payCycle }
+      ? { items, hourlyRate, dayHours, startDate, currentDate, payCycle, roster }
       : loadJobData(jobId);
     return {
       items: data.items,
@@ -642,6 +829,7 @@ export default function App(): JSX.Element {
       startDate: data.startDate,
       currentDate: data.currentDate.toISOString(),
       payCycle: data.payCycle,
+      roster: data.roster,
     };
   };
 
@@ -653,6 +841,7 @@ export default function App(): JSX.Element {
       startDate,
       dayHours,
       payCycle,
+      roster,
     };
     const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -697,12 +886,13 @@ export default function App(): JSX.Element {
     jobs.forEach(job => clearJobStorage(job.id));
     nextJobs.forEach(job => {
       const normalized = normalizeJobData(jobDataMap[job.id]);
-      localStorage.setItem(jobStorageKey(job.id, "items"), JSON.stringify(normalized.items));
-      localStorage.setItem(jobStorageKey(job.id, "hourlyRate"), String(normalized.hourlyRate));
-      localStorage.setItem(jobStorageKey(job.id, "payCycle"), normalized.payCycle);
-      localStorage.setItem(jobStorageKey(job.id, "dayHours"), JSON.stringify(normalized.dayHours));
-      localStorage.setItem(jobStorageKey(job.id, "startDate"), normalized.startDate);
-      localStorage.setItem(jobStorageKey(job.id, "currentDate"), normalized.currentDate.toISOString());
+      safeSetItem(jobStorageKey(job.id, "items"), JSON.stringify(normalized.items));
+      safeSetItem(jobStorageKey(job.id, "hourlyRate"), String(normalized.hourlyRate));
+      safeSetItem(jobStorageKey(job.id, "payCycle"), normalized.payCycle);
+      safeSetItem(jobStorageKey(job.id, "roster"), JSON.stringify(normalized.roster));
+      safeSetItem(jobStorageKey(job.id, "dayHours"), JSON.stringify(normalized.dayHours));
+      safeSetItem(jobStorageKey(job.id, "startDate"), normalized.startDate);
+      safeSetItem(jobStorageKey(job.id, "currentDate"), normalized.currentDate.toISOString());
     });
 
     const nextActive = typeof payload.activeJobId === "string" && nextJobs.some(job => job.id === payload.activeJobId)
@@ -715,6 +905,7 @@ export default function App(): JSX.Element {
     setItems(activeData.items);
     setHourlyRate(activeData.hourlyRate);
     setPayCycle(activeData.payCycle);
+    setRoster(activeData.roster);
     setDayHours(activeData.dayHours);
     setStartDate(activeData.startDate);
     setCurrentDate(activeData.currentDate);
@@ -735,6 +926,13 @@ export default function App(): JSX.Element {
         if (parsed.items) setItems(parsed.items);
         if (parsed.hourlyRate) setHourlyRate(Number(parsed.hourlyRate));
         if (parsed.payCycle && (parsed.payCycle === "biweekly" || parsed.payCycle === "semi-monthly" || parsed.payCycle === "monthly")) setPayCycle(parsed.payCycle);
+        if (parsed.roster && typeof parsed.roster === "object") {
+          const rosterParsed = {
+            weekly: parsed.roster.weekly && typeof parsed.roster.weekly === "object" ? parsed.roster.weekly : {},
+            monthly: parsed.roster.monthly && typeof parsed.roster.monthly === "object" ? parsed.roster.monthly : {},
+          };
+          setRoster(rosterParsed);
+        }
         if (parsed.startDate) setStartDate(parsed.startDate);
         if (parsed.dayHours) setDayHours(parsed.dayHours);
         notify(labels[lang].imported);
@@ -748,9 +946,9 @@ export default function App(): JSX.Element {
 
   const saveAll = () => {
     persistJobData(activeJobId);
-    localStorage.setItem(JOBS_STORAGE_KEY, JSON.stringify(jobs));
-    localStorage.setItem(ACTIVE_JOB_STORAGE_KEY, activeJobId);
-    localStorage.setItem("w2b_dark", darkMode ? "1" : "0");
+    safeSetItem(JOBS_STORAGE_KEY, JSON.stringify(jobs));
+    safeSetItem(ACTIVE_JOB_STORAGE_KEY, activeJobId);
+    safeSetItem("w2b_dark", darkMode ? "1" : "0");
     notify("Saved");
   };
 
@@ -761,6 +959,7 @@ export default function App(): JSX.Element {
     setDayHours([]);
     setHourlyRate(17.6);
     setPayCycle("biweekly");
+    setRoster({ weekly: {}, monthly: {} });
     setStartDate(ymd(getTorontoToday()));
     setCurrentDate(getTorontoToday());
     setDarkMode(false);
@@ -778,6 +977,49 @@ export default function App(): JSX.Element {
   const rows = Math.ceil(totalCells / 7);
   const totalGrid = rows * 7;
   const todayStr = ymd(getTorontoToday());
+
+  useLayoutEffect(() => {
+    if (!calGridRef.current || rows <= 0) return;
+    const node = calGridRef.current;
+    let raf = 0;
+
+    const measure = () => {
+      if (!node) return;
+      const cells = Array.from(node.querySelectorAll<HTMLElement>(".cal-cell"));
+      if (cells.length === 0) return;
+      const heights = Array.from({ length: rows }, () => 0);
+      cells.forEach((cell, idx) => {
+        const row = Math.floor(idx / 7);
+        const h = cell.getBoundingClientRect().height;
+        if (h > heights[row]) heights[row] = h;
+      });
+      if (heights.every(h => h > 0)) {
+        const next = heights.map(h => `${Math.ceil(h)}px`).join(" ");
+        setWeekRowTemplate(prev => (prev === next ? prev : next));
+      }
+    };
+
+    const schedule = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(measure);
+    };
+
+    schedule();
+
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(schedule);
+      observer.observe(node);
+    } else {
+      window.addEventListener("resize", schedule);
+    }
+
+    return () => {
+      cancelAnimationFrame(raf);
+      if (observer) observer.disconnect();
+      else window.removeEventListener("resize", schedule);
+    };
+  }, [rows]);
 
   /* quick map for lookup */
   const detailedMap = useMemo(() => {
@@ -809,6 +1051,19 @@ export default function App(): JSX.Element {
       hourlyRate: "Hourly Rate",
       startDate: "Start Date",
       payCycle: "Pay Cycle",
+      roster: "Roster",
+      rosterPeriod: "Roster Period",
+      rosterWeekly: "Weekly",
+      rosterMonthly: "Monthly",
+      rosterUpload: "Upload Image",
+      rosterRemove: "Remove Photo",
+      rosterRemoveConfirm: "Remove this roster image?",
+      rosterRemoveOk: "Yes, Remove",
+      rosterEmpty: "No roster image",
+      rosterHasImage: "Image saved",
+      rosterView: "View Image",
+      rosterZoomIn: "Zoom In",
+      rosterClose: "Close",
       export: "Export Data",
       exportAll: "Export All Jobs",
       import: "Import Data",
@@ -861,12 +1116,25 @@ export default function App(): JSX.Element {
       itemList: "項目清單",
       hourlyRate: "時薪",
       startDate: "開始日期",
-      payCycle: "????",
+      payCycle: "發薪週期",
+      roster: "排班",
+      rosterPeriod: "排班週期",
+      rosterWeekly: "每週",
+      rosterMonthly: "每月",
+      rosterUpload: "上傳圖片",
+      rosterRemove: "移除照片",
+      rosterRemoveConfirm: "要移除這張排班照片嗎？",
+      rosterRemoveOk: "確認移除",
+      rosterEmpty: "尚無排班照片",
+      rosterHasImage: "已儲存照片",
+      rosterView: "查看照片",
+      rosterZoomIn: "放大",
+      rosterClose: "關閉",
       export: "匯出資料",
-      exportAll: "Export All Jobs",
-      job: "Job",
-      removeJob: "Remove Job",
+      exportAll: "匯出所有工作",
       import: "匯入資料",
+      job: "工作",
+      removeJob: "移除工作",
       quickSave: "快速儲存",
       details: "明細",
       noRecords: "無紀錄",
@@ -875,13 +1143,13 @@ export default function App(): JSX.Element {
       prevMonth: "上個月",
       nextMonth: "下個月",
       imported: "已匯入資料",
-      importedAll: "Imported all jobs",
+      importedAll: "已匯入所有工作",
       invalidImport: "匯入檔案格式錯誤",
       exported: "已匯出 JSON",
-      exportedAll: "Exported all jobs",
-      confirmRemoveJob: "Remove job",
-      removedJob: "Removed job",
-      cannotRemoveLastJob: "At least one job must remain",
+      exportedAll: "已匯出所有工作",
+      confirmRemoveJob: "移除工作",
+      removedJob: "已移除工作",
+      cannotRemoveLastJob: "至少保留一個工作",
       saved: "已儲存",
       allCleared: "已全部清除",
       lightMode: "淺色",
@@ -904,17 +1172,16 @@ export default function App(): JSX.Element {
         <div>
           <h1 className="title-blob">{labels[lang].title}</h1>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div className="header-actions" style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {/* Language Switch Button */}
           <button
-            className="btn small"
+            className="btn small header-btn"
             onClick={() => setLang(lang === "en" ? "zh-tw" : "en")}
-            style={{ minWidth: 60 }}
           >
             {labels[lang].switch}
           </button>
-          <button className="btn small" onClick={() => { setDarkMode(d => !d); notify(darkMode ? labels[lang].lightMode : labels[lang].darkMode); }}>
-            {darkMode ? `☀️ ${labels[lang].lightMode}` : `🌙 ${labels[lang].darkMode}`}
+          <button className="btn small header-btn" onClick={() => { setDarkMode(d => !d); notify(darkMode ? labels[lang].lightMode : labels[lang].darkMode); }}>
+            {darkMode ? labels[lang].lightMode : labels[lang].darkMode}
           </button>
         </div>
       </header>
@@ -1006,23 +1273,35 @@ export default function App(): JSX.Element {
           <table className="items-table">
             <thead>
               <tr>
-                <th style={{ width: 36 }}></th>
-                <th>Name</th>
-                <th style={{ width: 140 }}>Price</th>
-                <th style={{ width: 120 }}>Taxable</th>
-                <th style={{ width: 80 }}>Remove</th>
+                {[
+                  <th key="enabled" style={{ width: 36 }} />,
+                  <th key="name">Name</th>,
+                  <th key="price" style={{ width: 140 }}>Price</th>,
+                  <th key="taxable" style={{ width: 120 }}>Taxable</th>,
+                  <th key="remove" style={{ width: 80 }}>Remove</th>,
+                ]}
               </tr>
             </thead>
             <tbody>
               {items.map(it => (
                 <tr key={it.id}>
-                  <td>
-                    <input type="checkbox" checked={it.enabled} onChange={e => setItems(prev => prev.map(p => p.id === it.id ? { ...p, enabled: e.target.checked } : p))} />
-                  </td>
-                  <td><input className="item-name" value={it.name} onChange={e => setItems(prev => prev.map(p => p.id === it.id ? { ...p, name: e.target.value } : p))} /></td>
-                  <td><input type="number" value={it.price} onChange={e => setItems(prev => prev.map(p => p.id === it.id ? { ...p, price: Number(e.target.value) } : p))} /></td>
-                  <td><input type="checkbox" checked={it.taxable} onChange={e => setItems(prev => prev.map(p => p.id === it.id ? { ...p, taxable: e.target.checked } : p))} /></td>
-                  <td><button className="btn sm danger" onClick={() => removeItem(it.id)}>✕</button></td>
+                  {[
+                    <td key="enabled">
+                      <input type="checkbox" checked={it.enabled} onChange={e => setItems(prev => prev.map(p => p.id === it.id ? { ...p, enabled: e.target.checked } : p))} />
+                    </td>,
+                    <td key="name">
+                      <input className="item-name" value={it.name} onChange={e => setItems(prev => prev.map(p => p.id === it.id ? { ...p, name: e.target.value } : p))} />
+                    </td>,
+                    <td key="price">
+                      <input type="number" value={it.price} onChange={e => setItems(prev => prev.map(p => p.id === it.id ? { ...p, price: Number(e.target.value) } : p))} />
+                    </td>,
+                    <td key="taxable">
+                      <input type="checkbox" checked={it.taxable} onChange={e => setItems(prev => prev.map(p => p.id === it.id ? { ...p, taxable: e.target.checked } : p))} />
+                    </td>,
+                    <td key="remove">
+                      <button className="btn sm danger" onClick={() => removeItem(it.id)}>✕</button>
+                    </td>,
+                  ]}
                 </tr>
               ))}
             </tbody>
@@ -1033,23 +1312,32 @@ export default function App(): JSX.Element {
         </div>
       </div>
 
-      {/* Calendar + Bi-weekly summary (Prev/Month/Next on top of calendar) */}
-      <div className="calendar-summary-wrap" style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-        <div className="card calendar-card" style={{ flex: 1, minWidth: 320 }}>
-          <div className="calendar-header">
-            <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn small" onClick={prevMonth}>{labels[lang].prevMonth}</button>
+      {/* Calendar + Roster (Prev/Month/Next on top of calendar) */}
+      <div className="calendar-summary-scroll">
+        <div className="calendar-summary-wrap" style={{ display: "flex", gap: 12 }}>
+        <div className="card calendar-card" style={{ flex: 4, display: "flex", flexDirection: "column" }}>
+          <div className="calendar-header" style={{ height: 40, display: "flex", alignItems: "center" }}>
+            <div className="calendar-nav">
+              <button className="btn small calendar-prev" onClick={prevMonth}>{labels[lang].prevMonth}</button>
               <div className="month-title">{currentDate.toLocaleString(undefined, { month: "long", year: "numeric" })}</div>
 
-              <button className="btn small" onClick={nextMonth}>{labels[lang].nextMonth}</button>
+              <button className="btn small calendar-next" onClick={nextMonth}>{labels[lang].nextMonth}</button>
             </div>
           </div>
 
-          <div className="cal-head grid-7">
+          <div className="cal-head grid-7" style={{ height: 30 }}>
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(d => <div key={d} className="cal-head-cell">{d}</div>)}
           </div>
 
-          <div className="cal-grid">
+          <div
+            ref={calGridRef}
+            className="cal-grid"
+            style={{
+              flex: 1,
+              display: "grid",
+              gridTemplateRows: weekRowTemplate ?? `repeat(${rows}, 1fr)`,
+            }}
+          >
             {Array.from({ length: totalGrid }).map((_, idx) => {
               const dayNum = idx - firstWeekday + 1;
               const inMonth = dayNum >= 1 && dayNum <= daysInMonth;
@@ -1146,7 +1434,7 @@ export default function App(): JSX.Element {
                         min={0}
                         max={180}
                         step={5}
-                        value={getLunchMinutes(rawEntry)}
+                        value={rawEntry?.lunchMinutes ?? ""}
                         onChange={e => handleLunchMinutesInput(dateStr, e.target.value)}
                       />
                     </div>
@@ -1170,102 +1458,83 @@ export default function App(): JSX.Element {
                     {labels[lang].resetHours}
                   </button>
                 </div>
+                );
+              })}
+            </div>
+          </div>
+
+        <div className="card roster-card" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+          <div className="calendar-header" style={{ height: 40, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <h3 style={{ margin: 0 }}>{labels[lang].roster}</h3>
+            <select className="control-input" style={{ width: "auto", margin: 0 }} value={rosterMode} onChange={e => setRosterMode(e.target.value as "weekly" | "monthly")}>
+              <option value="weekly">{labels[lang].rosterWeekly}</option>
+              <option value="monthly">{labels[lang].rosterMonthly}</option>
+            </select>
+          </div>
+          <div className="cal-head" style={{ visibility: "hidden", height: 30 }}>
+            <div className="cal-head-cell">&nbsp;</div>
+          </div>
+
+          <div
+            className="roster-list"
+            style={{
+              flex: 1,
+              display: "grid",
+              gridTemplateRows: rosterMode === "weekly"
+                ? (weekRowTemplate ?? `repeat(${rows}, 1fr)`)
+                : "1fr",
+            }}
+          >
+              {(rosterMode === "weekly" ? weeklyRosterPeriods : [monthlyRosterPeriod]).map(period => {
+                const image = getRosterImage(rosterMode, period.key);
+                const spanAll = rosterMode === "monthly";
+                return (
+                  <div key={`${rosterMode}-${period.key}`} className="roster-item" style={spanAll ? { gridRow: "1 / -1" } : undefined}>
+                  {image && (
+                    <button
+                      type="button"
+                      className="roster-remove-x"
+                      onClick={() => setRosterConfirm({ mode: rosterMode, key: period.key })}
+                      aria-label={labels[lang].rosterRemove}
+                      title={labels[lang].rosterRemove}
+                    >
+                      X
+                    </button>
+                  )}
+                  <div className="roster-meta">
+                    <div style={{ fontSize: 13, color: "var(--muted)" }}>{period.start} ~ {period.end}</div>
+                    {!image && (
+                      <div style={{ fontSize: 13, color: "var(--muted)" }}>
+                        {labels[lang].rosterEmpty}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="roster-actions">
+                    <div className="roster-actions-buttons">
+                      {image && (
+                        <button
+                          type="button"
+                          className="roster-preview"
+                          onClick={() => setRosterViewer({ src: image, scale: 1 })}
+                          aria-label={labels[lang].rosterView}
+                        >
+                          <img src={image} alt="roster preview" />
+                        </button>
+                      )}
+                      <label className="btn primary file-upload-btn roster-upload-btn">
+                        {labels[lang].rosterUpload}
+                        <input type="file" accept="image/*" onChange={e => handleRosterFile(e, rosterMode, period.key)} className="file-input-hidden" />
+                      </label>
+                      <button className="btn" onClick={() => image && setRosterViewer({ src: image, scale: 1 })} disabled={!image}>{labels[lang].rosterView}</button>
+                    </div>
+                  </div>
+                </div>
               );
             })}
           </div>
-        </div>
-
-        <div className="card biweekly-card" style={{ width: "100%", minWidth: 220, marginTop: 16 }}>
-          <h3>{useMonthlyRule ? "Monthly Summary" : useSemiMonthlyRule ? "Pay Period Summary" : "Bi-weekly Summary"}</h3>
-          <table className="items-table">
-            <thead>
-              <tr>
-                <th>Period</th>
-                <th>Hrs</th>
-                <th>Period Date</th>
-                <th>{useUnlawfulRule ? "Earnings (<=88)" : "Earnings"}</th>
-                <th>{useUnlawfulRule ? "Earnings (>88)" : "Overtime Earnings"}</th>
-                <th>Income Tax</th>
-                <th>EI</th>
-                <th>CPP</th>
-                <th>{useUnlawfulRule ? "Net (<88)" : "Net"}</th>
-                <th>Take-Home Pay</th>
-              </tr>
-            </thead>
-            <tbody>
-              {biWeeklySummary.length === 0 && <tr><td colSpan={10} style={{ textAlign: "center" }}>No data</td></tr>}
-              {biWeeklySummary.map((b, i) => {
-                const periodDays = b.days || [];
-                const periodDates = (useSemiMonthlyRule || useMonthlyRule) && b.start && b.end
-                  ? `${b.start} ~ ${b.end}`
-                  : (periodDays.length > 0 ? `${periodDays[0].date} ~ ${periodDays[periodDays.length - 1].date}` : "");
-                const periodDetails = detailedHistory.filter(d => periodDays.some(day => day.date === d.date));
-                const hours = periodDetails.reduce((sum, d) => sum + d.hours, 0);
-
-                // Calculate earnings split for this period
-                let regularEarnings = 0;
-                let overtimeEarnings = 0;
-                const bonusMultiplier = 1 + BIWEEKLY_BONUS_RATE;
-                if (useUnlawfulRule) {
-                  let taxedHours = 0;
-                  for (const d of periodDetails) {
-                    const h = d.hours;
-                    const taxedLeft = Math.max(0, BIWEEKLY_TAXFREE_THRESHOLD - taxedHours);
-                    const thisTaxed = Math.min(h, taxedLeft);
-                    const thisOver = h - thisTaxed;
-                    taxedHours += thisTaxed;
-                    regularEarnings += thisTaxed * hourlyRate * bonusMultiplier;
-                    overtimeEarnings += thisOver * hourlyRate * bonusMultiplier;
-                  }
-                } else {
-                  const weeklyWorked = new Map<number, number>();
-                  for (const d of periodDetails) {
-                    const { weekIndex } = getIndexInfo(d.date);
-                    const workedSoFar = weeklyWorked.get(weekIndex) || 0;
-                    const regularHours = Math.max(0, Math.min(d.hours, WEEKLY_OVERTIME_THRESHOLD - workedSoFar));
-                    const overtimeHours = Math.max(0, d.hours - regularHours);
-                    weeklyWorked.set(weekIndex, workedSoFar + d.hours);
-                    regularEarnings += regularHours * hourlyRate * bonusMultiplier;
-                    overtimeEarnings += overtimeHours * hourlyRate * OVERTIME_MULTIPLIER * bonusMultiplier;
-                  }
-                }
-
-                // Deductions for regular hours (unlawful rule display)
-                const incomeTaxRegular = round2(regularEarnings * INCOME_TAX_RATE);
-                const employeeInsuranceRegular = round2(regularEarnings * EMPLOYEE_INSURANCE_RATE);
-                const cppRegular = round2(regularEarnings * CPP_RATE);
-                const afterTaxRegular = round2(regularEarnings - incomeTaxRegular - employeeInsuranceRegular - cppRegular);
-
-                // Deductions for all hours (lawful rule)
-                const incomeTaxTotal = periodDetails.reduce((sum, d) => sum + d.incomeTax, 0);
-                const employeeInsuranceTotal = periodDetails.reduce((sum, d) => sum + d.employeeInsurance, 0);
-                const cppTotal = periodDetails.reduce((sum, d) => sum + d.cpp, 0);
-                const afterTaxTotal = periodDetails.reduce((sum, d) => sum + d.afterTax, 0);
-
-                const displayIncomeTax = useUnlawfulRule ? incomeTaxRegular : incomeTaxTotal;
-                const displayEmployeeInsurance = useUnlawfulRule ? employeeInsuranceRegular : employeeInsuranceTotal;
-                const displayCpp = useUnlawfulRule ? cppRegular : cppTotal;
-                const displayNet = useUnlawfulRule ? afterTaxRegular : afterTaxTotal;
-                const displayTakeHome = useUnlawfulRule ? afterTaxRegular + overtimeEarnings : afterTaxTotal;
-
-                return (
-                  <tr key={b.index}>
-                    <td>{b.index}</td>
-                    <td>{round2(hours)}</td>
-                    <td>{periodDates}</td>
-                    <td>${round2(regularEarnings).toFixed(2)}</td>
-                    <td>${round2(overtimeEarnings).toFixed(2)}</td>
-                    <td>${round2(displayIncomeTax).toFixed(2)}</td>
-                    <td>${round2(displayEmployeeInsurance).toFixed(2)}</td>
-                    <td>${round2(displayCpp).toFixed(2)}</td>
-                    <td>${round2(displayNet).toFixed(2)}</td>
-                    <td>${round2(displayTakeHome).toFixed(2)}</td> {/* Expected Take-Home Pay */}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+      </div>
+      </div>
       </div>
 
       {/* Export / Import / Save / Clear */}
@@ -1282,6 +1551,102 @@ export default function App(): JSX.Element {
         <button className="btn danger" onClick={() => setShowClearConfirm(true)}>{labels[lang].clear}</button>
       </div>
 
+      <div className="card biweekly-card">
+        <h3>{useMonthlyRule ? "Monthly Summary" : useSemiMonthlyRule ? "Pay Period Summary" : "Bi-weekly Summary"}</h3>
+        <table className="items-table">
+          <thead>
+            <tr>
+              {[
+                <th key="period">Period</th>,
+                <th key="hrs">Hrs</th>,
+                <th key="period-date">Period Date</th>,
+                <th key="earnings">{useUnlawfulRule ? "Earnings (<=88)" : "Earnings"}</th>,
+                <th key="overtime">{useUnlawfulRule ? "Earnings (>88)" : "Overtime Earnings"}</th>,
+                <th key="tax">Income Tax</th>,
+                <th key="ei">EI</th>,
+                <th key="cpp">CPP</th>,
+                <th key="net">{useUnlawfulRule ? "Net (<88)" : "Net"}</th>,
+                <th key="takehome">Take-Home Pay</th>,
+              ]}
+            </tr>
+          </thead>
+          <tbody>
+            {biWeeklySummary.length === 0 && <tr><td colSpan={10} style={{ textAlign: "center" }}>No data</td></tr>}
+            {biWeeklySummary.map((b, i) => {
+              const periodDays = b.days || [];
+              const periodDates = (useSemiMonthlyRule || useMonthlyRule) && b.start && b.end
+                ? `${b.start} ~ ${b.end}`
+                : (periodDays.length > 0 ? `${periodDays[0].date} ~ ${periodDays[periodDays.length - 1].date}` : "");
+              const periodDetails = detailedHistory.filter(d => periodDays.some(day => day.date === d.date));
+              const hours = periodDetails.reduce((sum, d) => sum + d.hours, 0);
+
+              // Calculate earnings split for this period
+              let regularEarnings = 0;
+              let overtimeEarnings = 0;
+              const bonusMultiplier = 1 + BIWEEKLY_BONUS_RATE;
+              if (useUnlawfulRule) {
+                let taxedHours = 0;
+                for (const d of periodDetails) {
+                  const h = d.hours;
+                  const taxedLeft = Math.max(0, BIWEEKLY_TAXFREE_THRESHOLD - taxedHours);
+                  const thisTaxed = Math.min(h, taxedLeft);
+                  const thisOver = h - thisTaxed;
+                  taxedHours += thisTaxed;
+                  regularEarnings += thisTaxed * hourlyRate * bonusMultiplier;
+                  overtimeEarnings += thisOver * hourlyRate * bonusMultiplier;
+                }
+              } else {
+                const weeklyWorked = new Map<number, number>();
+                for (const d of periodDetails) {
+                  const { weekIndex } = getIndexInfo(d.date);
+                  const workedSoFar = weeklyWorked.get(weekIndex) || 0;
+                  const regularHours = Math.max(0, Math.min(d.hours, WEEKLY_OVERTIME_THRESHOLD - workedSoFar));
+                  const overtimeHours = Math.max(0, d.hours - regularHours);
+                  weeklyWorked.set(weekIndex, workedSoFar + d.hours);
+                  regularEarnings += regularHours * hourlyRate * bonusMultiplier;
+                  overtimeEarnings += overtimeHours * hourlyRate * OVERTIME_MULTIPLIER * bonusMultiplier;
+                }
+              }
+
+              // Deductions for regular hours (unlawful rule display)
+              const incomeTaxRegular = round2(regularEarnings * INCOME_TAX_RATE);
+              const employeeInsuranceRegular = round2(regularEarnings * EMPLOYEE_INSURANCE_RATE);
+              const cppRegular = round2(regularEarnings * CPP_RATE);
+              const afterTaxRegular = round2(regularEarnings - incomeTaxRegular - employeeInsuranceRegular - cppRegular);
+
+              // Deductions for all hours (lawful rule)
+              const incomeTaxTotal = periodDetails.reduce((sum, d) => sum + d.incomeTax, 0);
+              const employeeInsuranceTotal = periodDetails.reduce((sum, d) => sum + d.employeeInsurance, 0);
+              const cppTotal = periodDetails.reduce((sum, d) => sum + d.cpp, 0);
+              const afterTaxTotal = periodDetails.reduce((sum, d) => sum + d.afterTax, 0);
+
+              const displayIncomeTax = useUnlawfulRule ? incomeTaxRegular : incomeTaxTotal;
+              const displayEmployeeInsurance = useUnlawfulRule ? employeeInsuranceRegular : employeeInsuranceTotal;
+              const displayCpp = useUnlawfulRule ? cppRegular : cppTotal;
+              const displayNet = useUnlawfulRule ? afterTaxRegular : afterTaxTotal;
+              const displayTakeHome = useUnlawfulRule ? afterTaxRegular + overtimeEarnings : afterTaxTotal;
+
+              return (
+                <tr key={b.index}>
+                  {[
+                    <td key="index">{b.index}</td>,
+                    <td key="hours">{round2(hours)}</td>,
+                    <td key="dates">{periodDates}</td>,
+                    <td key="regular">${round2(regularEarnings).toFixed(2)}</td>,
+                    <td key="overtime">${round2(overtimeEarnings).toFixed(2)}</td>,
+                    <td key="income-tax">${round2(displayIncomeTax).toFixed(2)}</td>,
+                    <td key="ei">${round2(displayEmployeeInsurance).toFixed(2)}</td>,
+                    <td key="cpp">${round2(displayCpp).toFixed(2)}</td>,
+                    <td key="net">${round2(displayNet).toFixed(2)}</td>,
+                    <td key="take-home">${round2(displayTakeHome).toFixed(2)}</td>,
+                  ]}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
       {/* Details / History */}
       <div className="card">
         <h3>{labels[lang].details}</h3>
@@ -1289,13 +1654,15 @@ export default function App(): JSX.Element {
           <table className="details-table">
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Hours</th>
-                <th>Earnings</th>
-                <th>Income Tax</th>
-                <th>Employee Insurance</th>
-                <th>CPP</th>
-                <th>After Tax</th>
+                {[
+                  <th key="date">Date</th>,
+                  <th key="hours">Hours</th>,
+                  <th key="earnings">Earnings</th>,
+                  <th key="tax">Income Tax</th>,
+                  <th key="ei">Employee Insurance</th>,
+                  <th key="cpp">CPP</th>,
+                  <th key="after">After Tax</th>,
+                ]}
               </tr>
             </thead>
             <tbody>
@@ -1306,19 +1673,51 @@ export default function App(): JSX.Element {
               )}
               {detailedHistory.map(d => (
                 <tr key={d.date}>
-                  <td>{d.date}</td>
-                  <td>{d.hours.toFixed(2)}</td>
-                  <td>${d.earnings.toFixed(2)}</td>
-                  <td>${d.incomeTax.toFixed(2)}</td>
-                  <td>${d.employeeInsurance.toFixed(2)}</td>
-                  <td>${d.cpp.toFixed(2)}</td>
-                  <td>${d.afterTax.toFixed(2)}</td>
+                  {[
+                    <td key="date">{d.date}</td>,
+                    <td key="hours">{d.hours.toFixed(2)}</td>,
+                    <td key="earnings">${d.earnings.toFixed(2)}</td>,
+                    <td key="tax">${d.incomeTax.toFixed(2)}</td>,
+                    <td key="ei">${d.employeeInsurance.toFixed(2)}</td>,
+                    <td key="cpp">${d.cpp.toFixed(2)}</td>,
+                    <td key="after">${d.afterTax.toFixed(2)}</td>,
+                  ]}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* roster viewer modal */}
+      {rosterViewer && (
+        <div className="modal-backdrop" onClick={() => setRosterViewer(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 720 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div>{labels[lang].rosterView}</div>
+              <button className="btn modal-close-btn" onClick={() => setRosterViewer(null)}>{"X"}</button>
+            </div>
+            <div style={{ overflow: "auto", maxHeight: "70vh", border: "1px solid var(--border)", borderRadius: 8, padding: 8, display: "flex", justifyContent: "center" }}>
+              <img src={rosterViewer.src} alt="roster" style={{ width: "100%", height: "auto", maxHeight: "70vh", objectFit: "contain", transform: `scale(${rosterViewer.scale})`, transformOrigin: "center top" }} />
+            </div>
+            <div className="modal-actions" style={{ marginTop: 8 }} />
+          </div>
+        </div>
+      )}
+
+      {/* roster remove confirm modal */}
+      {rosterConfirm && (
+        <div className="modal-backdrop" onClick={() => setRosterConfirm(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
+        
+            <div style={{ marginBottom: 12 }}>{labels[lang].rosterRemoveConfirm}</div>
+            <div className="modal-actions">
+              <button className="btn" onClick={() => setRosterConfirm(null)}>{labels[lang].cancel}</button>
+              <button className="btn danger" onClick={() => { clearRosterImage(rosterConfirm.mode, rosterConfirm.key); setRosterConfirm(null); }}>{labels[lang].rosterRemoveOk}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* notification */}
       {notification && <div className="notification" role="status" onClick={() => setNotification("")}>{notification}</div>}
@@ -1451,3 +1850,4 @@ function CustomTimeInput({
     </div>
   );
 }
+
