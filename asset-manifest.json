@@ -1,14 +1,14 @@
 {
   "files": {
     "main.css": "/work-to-buy/static/css/main.c96f7a2a.css",
-    "main.js": "/work-to-buy/static/js/main.f4ea44e3.js",
+    "main.js": "/work-to-buy/static/js/main.5e3549fe.js",
     "static/media/rick-y-morty-rick.png": "/work-to-buy/static/media/rick-y-morty-rick.a6e981671f7d6b475ec1.png",
     "index.html": "/work-to-buy/index.html",
     "main.c96f7a2a.css.map": "/work-to-buy/static/css/main.c96f7a2a.css.map",
-    "main.f4ea44e3.js.map": "/work-to-buy/static/js/main.f4ea44e3.js.map"
+    "main.5e3549fe.js.map": "/work-to-buy/static/js/main.5e3549fe.js.map"
   },
   "entrypoints": [
     "static/css/main.c96f7a2a.css",
-    "static/js/main.f4ea44e3.js"
+    "static/js/main.5e3549fe.js"
   ]
 }
