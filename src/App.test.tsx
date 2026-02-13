@@ -70,7 +70,7 @@ afterEach(() => {
 
 test("renders core sections", () => {
   render(<App />);
-  expect(screen.getByText("Work Hours Tracker")).toBeInTheDocument();
+  expect(screen.getByText("Work Record Keeper")).toBeInTheDocument();
   expect(screen.getByText("Roster")).toBeInTheDocument();
   expect(screen.getAllByText("Upload Image").length).toBeGreaterThan(0);
   expect(screen.getByText("Item List")).toBeInTheDocument();
@@ -234,7 +234,7 @@ test("app does not crash if localStorage is full", () => {
   });
 
   render(<App />);
-  expect(screen.getByText("Work Hours Tracker")).toBeInTheDocument();
+  expect(screen.getByText("Work Record Keeper")).toBeInTheDocument();
 
   setItemSpy.mockRestore();
 });
