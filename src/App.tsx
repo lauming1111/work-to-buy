@@ -1035,7 +1035,7 @@ export default function App(): JSX.Element {
       confirmResetTitle: "Reset this month's hours?",
       okReset: "OK, Reset",
       switch: "中文",
-      title: "Work Hours Tracker",
+      title: "Work Record Keeper",
       info: "Information",
       totalEarned: "Total Earned After Tax",
       totalItem: "Total Item Price After Tax",
