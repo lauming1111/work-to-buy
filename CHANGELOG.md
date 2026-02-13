@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.1.4](https://github.com/lauming1111/work-to-buy/compare/v0.1.3...v0.1.4) (2026-02-13)
+
+
+### Features
+
+* add Roster ([9e07616](https://github.com/lauming1111/work-to-buy/commit/9e07616755234c82ea88abb79f6c987e6d9ccd2a))
+* support different payment cycle ([c2eea77](https://github.com/lauming1111/work-to-buy/commit/c2eea7719d46706a9e3badc0e73fa18beda9ed85))
+
 ### [0.1.3](https://github.com/lauming1111/work-to-buy/compare/v0.1.2...v0.1.3) (2026-01-01)
 
 ### [0.1.2](https://github.com/lauming1111/work-to-buy/compare/v0.1.1...v0.1.2) (2026-01-01)
