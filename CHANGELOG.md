@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.1.5](https://github.com/lauming1111/work-to-buy/compare/v0.1.4...v0.1.5) (2026-08-19)
+
+
+### Features
+
+* combine after-tax earnings across all jobs ([2f18a73](https://github.com/lauming1111/work-to-buy/commit/2f18a731e675e417d7a1511d9e861ce1946b712c))
+
 ### [0.1.4](https://github.com/lauming1111/work-to-buy/compare/v0.1.3...v0.1.4) (2026-02-13)
 
 
