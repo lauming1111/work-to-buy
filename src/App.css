@@ -168,14 +168,16 @@
 .job-tabs-scroll {
   display: flex;
   gap: 8px;
-  overflow-x: visible;
-  justify-items: stretch;
-  justify-content: stretch;
-  align-content: stretch;
-  flex: 1;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  flex: 1 1 auto;
+  min-width: 0;
   padding-bottom: 4px;
 }
 .job-tab {
+  flex: 0 0 auto;
+  white-space: nowrap;
   border: 1px solid rgba(0,0,0,0.12);
   background: transparent;
   color: inherit;
@@ -204,22 +206,68 @@
 }
 
 /* all jobs summary */
-.all-jobs-table td { font-variant-numeric: tabular-nums }
-.all-jobs-table .active-job-row td { font-weight:600 }
+.all-jobs-card h3 { margin-bottom: 10px }
+.all-jobs-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.all-jobs-table th,
+.all-jobs-table td {
+  padding: 8px 6px;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  font-size: 14px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.all-jobs-table th {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.all-jobs-table .aj-name {
+  text-align: left;
+  white-space: normal;
+  word-break: break-word;
+  width: 40%;
+}
+.big-container.dark .all-jobs-table th,
+.big-container.dark .all-jobs-table td {
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.all-jobs-table .active-job-row td { font-weight: 700 }
 .all-jobs-table .all-jobs-total td {
-  border-top:2px solid rgba(0,0,0,0.12);
-  border-bottom:none;
+  font-weight: 700;
+  border-top: 2px solid rgba(0,0,0,0.12);
+  border-bottom: none;
 }
 .big-container.dark .all-jobs-table .all-jobs-total td {
-  border-top:2px solid rgba(255,255,255,0.18);
+  border-top: 2px solid rgba(255,255,255,0.18);
 }
 .combine-jobs-toggle {
-  display:flex;
-  align-items:center;
-  gap:8px;
-  margin-top:10px;
-  font-size:14px;
-  cursor:pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.combine-jobs-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 600px) {
+  .all-jobs-table th,
+  .all-jobs-table td {
+    padding: 6px 3px;
+    font-size: 13px;
+  }
+  .all-jobs-table th { font-size: 11px }
+  .all-jobs-table .aj-name { width: 30% }
+  .combine-jobs-toggle { font-size: 13px }
 }
 
 /* items table */
@@ -290,6 +338,16 @@
   font-size: 13px;
 }
 .big-container.light .cal-input { background:#f8fafc; color:var(--text-dark) }
+/* Number spinners sit inside the field and push centred text off-centre */
+.cal-input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.cal-input[type="number"]::-webkit-outer-spin-button,
+.cal-input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 .cal-earn { margin-top:auto; color:var(--muted); font-size:12px }
 
 /* Antd TimePicker alignment */
@@ -736,8 +794,8 @@
 
 @media (max-width: 600px) {
   .cal-cell .lunch-minutes-input {
-    width: 64px;
-    max-width: 64px;
+    width: 100%;
+    max-width: 100%;
     font-size: 14px;
   }
   .calendar-summary-wrap {
@@ -905,8 +963,9 @@
     line-height: 1.1;
   }
   .cal-cell .lunch-minutes-input {
-    width: 52px;
-    max-width: 52px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     height: 24px;
     font-size: 11px;
   }
@@ -1092,5 +1151,55 @@ html.dark {
   .biweekly-card .items-table {
     min-width: 900px;
     width: max-content;
+  }
+}
+
+/* ---------- mobile fixes ---------- */
+
+/* Title and the language/theme buttons stack instead of overflowing the header */
+@media (max-width: 600px) {
+  header {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  header > div:first-child {
+    flex: 1 1 100%;
+  }
+  .header-actions {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+  .title-blob {
+    font-size: 1.9rem;
+    letter-spacing: -0.5px;
+  }
+}
+
+/* A 7-column calendar cannot hold a time picker at phone widths, so let it
+   scroll sideways with usable cells instead of squeezing every column. */
+@media (max-width: 480px) {
+  .calendar-card,
+  .calendar-scroll-wrap {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .cal-grid,
+  .cal-head {
+    grid-template-columns: repeat(7, 82px) !important;
+    width: max-content !important;
+    min-width: max-content !important;
+  }
+  .cal-cell,
+  .cal-head-cell {
+    min-width: 82px;
+    max-width: 82px;
+    padding: 6px 4px;
+  }
+  .cal-earn,
+  .cal-hours {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }

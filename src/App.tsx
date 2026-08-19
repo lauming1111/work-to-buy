@@ -1040,34 +1040,32 @@ export default function App(): JSX.Element {
       {jobs.length > 1 && (
         <div className="card all-jobs-card">
           <h3>{labels[lang].allJobs}</h3>
-          <div className="items-scroll">
-            <table className="items-table all-jobs-table">
-              <thead>
-                <tr>
-                  <th>{labels[lang].job}</th>
-                  <th style={{ width: 110 }}>{labels[lang].jobRate}</th>
-                  <th style={{ width: 100 }}>{labels[lang].jobHours}</th>
-                  <th style={{ width: 140 }}>{labels[lang].jobAfterTax}</th>
+          <table className="all-jobs-table">
+            <thead>
+              <tr>
+                <th className="aj-name">{labels[lang].job}</th>
+                <th>{labels[lang].jobRate}</th>
+                <th>{labels[lang].jobHours}</th>
+                <th>{labels[lang].jobAfterTax}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allJobsSummary.jobs.map(job => (
+                <tr key={job.id} className={job.id === activeJobId ? "active-job-row" : ""}>
+                  <td className="aj-name">{job.name}</td>
+                  <td>${job.hourlyRate.toFixed(2)}</td>
+                  <td>{job.hours.toFixed(2)}</td>
+                  <td>${job.afterTax.toFixed(2)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {allJobsSummary.jobs.map(job => (
-                  <tr key={job.id} className={job.id === activeJobId ? "active-job-row" : ""}>
-                    <td>{job.name}</td>
-                    <td>${job.hourlyRate.toFixed(2)}</td>
-                    <td>{job.hours.toFixed(2)}</td>
-                    <td>${job.afterTax.toFixed(2)}</td>
-                  </tr>
-                ))}
-                <tr className="all-jobs-total">
-                  <td><strong>{labels[lang].combinedTotal}</strong></td>
-                  <td>—</td>
-                  <td><strong>{allJobsSummary.totalHours.toFixed(2)}</strong></td>
-                  <td><strong>${allJobsSummary.totalAfterTax.toFixed(2)}</strong></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+              ))}
+              <tr className="all-jobs-total">
+                <td className="aj-name">{labels[lang].combinedTotal}</td>
+                <td>—</td>
+                <td>{allJobsSummary.totalHours.toFixed(2)}</td>
+                <td>${allJobsSummary.totalAfterTax.toFixed(2)}</td>
+              </tr>
+            </tbody>
+          </table>
           <label className="combine-jobs-toggle">
             <input
               type="checkbox"

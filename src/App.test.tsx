@@ -341,6 +341,35 @@ test("editing the rate of one job leaves the other job's earnings alone", () => 
   expect(table.getByText("$238.69")).toBeInTheDocument(); // Studio, untouched
 });
 
+test("the all-jobs table keeps the columns its responsive styles target", () => {
+  seedTwoJobs();
+  render(<App />);
+
+  const table = allJobsTable();
+  // the job column is the one that wraps; the rest stay on one line
+  const header = table.querySelectorAll("thead th");
+  expect(header).toHaveLength(4);
+  expect(header[0]).toHaveClass("aj-name");
+  expect(header[1]).not.toHaveClass("aj-name");
+
+  // no inline widths: the mobile rules size the columns
+  header.forEach(th => expect(th.getAttribute("style")).toBeNull());
+
+  table.querySelectorAll("tbody tr").forEach(row => {
+    expect(row.querySelectorAll("td")).toHaveLength(4);
+    expect(row.querySelectorAll("td")[0]).toHaveClass("aj-name");
+  });
+});
+
+test("number inputs in the calendar hide their spinners, which would offset the centred value", () => {
+  // jsdom has no layout and no ::-webkit-* pseudo-elements, so this guards the
+  // rule itself: without it Chrome reserves space for the spinner inside the
+  // field and the centred number sits left of centre.
+  const css = require("fs").readFileSync(require("path").join(__dirname, "App.css"), "utf8");
+  expect(css).toMatch(/\.cal-input\[type="number"\]\s*\{[^}]*appearance:\s*textfield/);
+  expect(css).toMatch(/\.cal-input\[type="number"\]::-webkit-inner-spin-button/);
+});
+
 /* ---------------- shopping list is charged sales tax, not income tax ---------------- */
 
 test("taxable items are charged 13% HST on top of their price", () => {
