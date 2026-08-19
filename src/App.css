@@ -203,6 +203,25 @@
   box-shadow: none;
 }
 
+/* all jobs summary */
+.all-jobs-table td { font-variant-numeric: tabular-nums }
+.all-jobs-table .active-job-row td { font-weight:600 }
+.all-jobs-table .all-jobs-total td {
+  border-top:2px solid rgba(0,0,0,0.12);
+  border-bottom:none;
+}
+.big-container.dark .all-jobs-table .all-jobs-total td {
+  border-top:2px solid rgba(255,255,255,0.18);
+}
+.combine-jobs-toggle {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-top:10px;
+  font-size:14px;
+  cursor:pointer;
+}
+
 /* items table */
 .items-scroll { overflow:auto }
 .items-table { width:100%; border-collapse:collapse }

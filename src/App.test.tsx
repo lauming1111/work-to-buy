@@ -1,6 +1,7 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import App from "./App";
+import { jobStorageKey } from "./storage";
 
 type MockFile = File & { __dataUrl?: string; __text?: string };
 
@@ -93,12 +94,14 @@ test("add and remove job", () => {
   const confirmSpy = jest.spyOn(window, "confirm").mockReturnValue(true);
 
   render(<App />);
+  // scoped to the job tabs: the all-jobs summary lists job names too
+  const jobTabs = () => within(document.querySelector(".job-tabs") as HTMLElement);
   fireEvent.click(screen.getByText("+ Job"));
-  expect(screen.getByText("Side Job")).toBeInTheDocument();
+  expect(jobTabs().getByText("Side Job")).toBeInTheDocument();
 
   fireEvent.click(screen.getByText("Remove Job"));
-  expect(screen.queryByText("Side Job")).not.toBeInTheDocument();
-  expect(screen.getByText("Main Job")).toBeInTheDocument();
+  expect(jobTabs().queryByText("Side Job")).not.toBeInTheDocument();
+  expect(jobTabs().getByText("Main Job")).toBeInTheDocument();
 
   promptSpy.mockRestore();
   confirmSpy.mockRestore();
@@ -237,4 +240,103 @@ test("app does not crash if localStorage is full", () => {
   expect(screen.getByText("Work Record Keeper")).toBeInTheDocument();
 
   setItemSpy.mockRestore();
+});
+
+/* ---------------- multiple jobs, each on its own salary rate ---------------- */
+
+const seedJob = (id: string, rate: string, hours: number) => {
+  localStorage.setItem(jobStorageKey(id, "hourlyRate"), rate);
+  localStorage.setItem(jobStorageKey(id, "startDate"), "2024-01-01");
+  localStorage.setItem(jobStorageKey(id, "currentDate"), new Date("2024-01-15T00:00:00Z").toISOString());
+  localStorage.setItem(jobStorageKey(id, "dayHours"), JSON.stringify([{ date: "2024-01-02", hours }]));
+};
+
+const seedTwoJobs = () => {
+  localStorage.setItem("w2b_jobs", JSON.stringify([
+    { id: "cafe", name: "Cafe" },
+    { id: "studio", name: "Studio" },
+  ]));
+  localStorage.setItem("w2b_activeJob", "cafe");
+  seedJob("cafe", "20", 8);   // 8h at $20 -> $135.08 after tax
+  seedJob("studio", "30", 8); // 8h at $30 -> $202.63 after tax
+  localStorage.setItem(jobStorageKey("cafe", "items"), JSON.stringify([
+    { id: 1, name: "Laptop", price: 500, taxable: false, enabled: true },
+  ]));
+};
+
+const allJobsTable = () => document.querySelector(".all-jobs-table") as HTMLElement;
+const rateInput = () => document.querySelector(".controls input[type=\"number\"]") as HTMLInputElement;
+
+test("hides the all-jobs summary when there is only one job", () => {
+  render(<App />);
+  expect(screen.queryByText("All Jobs")).not.toBeInTheDocument();
+});
+
+test("lists every job with its own hourly rate", () => {
+  seedTwoJobs();
+  render(<App />);
+
+  const table = within(allJobsTable());
+  expect(table.getByText("Cafe")).toBeInTheDocument();
+  expect(table.getByText("Studio")).toBeInTheDocument();
+  expect(table.getByText("$20.00")).toBeInTheDocument();
+  expect(table.getByText("$30.00")).toBeInTheDocument();
+  expect(table.getByText("$135.08")).toBeInTheDocument();
+  expect(table.getByText("$202.63")).toBeInTheDocument();
+});
+
+test("shows the combined after-tax total across jobs", () => {
+  seedTwoJobs();
+  render(<App />);
+
+  const table = within(allJobsTable());
+  expect(table.getByText("$337.71")).toBeInTheDocument(); // 135.08 + 202.63
+  expect(table.getByText("16.00")).toBeInTheDocument();   // 8h + 8h
+});
+
+test("combining jobs counts every job toward the buy-list progress", () => {
+  seedTwoJobs();
+  render(<App />);
+
+  // active job only: 135.08 / 500
+  expect(screen.getByText("27.02%")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByLabelText("Count all jobs toward progress"));
+
+  // all jobs: 337.71 / 500
+  expect(screen.getByText("67.54%")).toBeInTheDocument();
+  expect(localStorage.getItem("w2b_combineJobs")).toBe("1");
+});
+
+test("the combine setting is restored from storage", () => {
+  seedTwoJobs();
+  localStorage.setItem("w2b_combineJobs", "1");
+  render(<App />);
+
+  expect((screen.getByLabelText("Count all jobs toward progress") as HTMLInputElement).checked).toBe(true);
+  expect(screen.getByText("67.54%")).toBeInTheDocument();
+});
+
+test("switching jobs loads that job's own hourly rate", () => {
+  seedTwoJobs();
+  render(<App />);
+  expect(rateInput().value).toBe("20");
+
+  fireEvent.click(screen.getByRole("button", { name: "Studio" }));
+
+  expect(rateInput().value).toBe("30");
+  // the combined total does not change with the active job
+  expect(within(allJobsTable()).getByText("$337.71")).toBeInTheDocument();
+});
+
+test("editing the rate of one job leaves the other job's earnings alone", () => {
+  seedTwoJobs();
+  render(<App />);
+
+  fireEvent.change(rateInput(), { target: { value: "40" } });
+
+  const table = within(allJobsTable());
+  expect(table.getByText("$40.00")).toBeInTheDocument();
+  expect(table.getByText("$270.16")).toBeInTheDocument(); // Cafe, 8h at $40
+  expect(table.getByText("$202.63")).toBeInTheDocument(); // Studio, untouched
 });

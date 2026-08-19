@@ -6,6 +6,8 @@ Track hours, calculate after-tax earnings, and manage weekly/monthly roster imag
 - Automatic lunch deduction (per-day minutes input)
 - Bi-weekly summaries and progress tracking
 - Multi-job support with import/export
+- Per-job hourly rate, start date and pay cycle
+- Combined all-jobs summary; optionally count every job toward buy-list progress
 - Weekly/Monthly roster image upload + viewer
 - Mobile-safe roster uploads (client-side resize/compress)
 - Light/Dark mode and bilingual UI (EN / zh-tw)
@@ -37,6 +39,8 @@ npm run deploy
 
 ## Project Structure
 - `src/App.tsx` main UI and logic
+- `src/calc.ts` pay/tax calculations and multi-job aggregation (pure, unit tested)
+- `src/storage.ts` `localStorage` layer, per-job keys and legacy fallbacks
 - `src/App.css` styles
 - `public/` static assets
 

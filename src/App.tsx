@@ -4,214 +4,54 @@ import dayjs, { Dayjs } from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 import { TimePicker } from "antd";
 import ram from './fun-images/rick-y-morty-rick.png';
+import {
+  AllJobsExport,
+  AllJobsSummary,
+  BIWEEKLY_BONUS_RATE,
+  BIWEEKLY_TAXFREE_THRESHOLD,
+  CPP_RATE,
+  DayHours,
+  DetailedDay,
+  EMPLOYEE_INSURANCE_RATE,
+  INCOME_TAX_RATE,
+  Item,
+  JobExport,
+  JobMeta,
+  NormalizedJobData,
+  OVERTIME_MULTIPLIER,
+  PaymentCycle,
+  RosterData,
+  WEEKLY_OVERTIME_THRESHOLD,
+  clampLunchMinutes,
+  computeDetailedDays,
+  getIndexInfo as calcIndexInfo,
+  getLunchMinutes,
+  getOriginalHours,
+  getTorontoToday,
+  isUnlawfulRuleJob,
+  parseYmdLocal,
+  round2,
+  summarizeJobs,
+  ymd,
+} from "./calc";
+import {
+  ACTIVE_JOB_STORAGE_KEY,
+  COMBINE_JOBS_STORAGE_KEY,
+  DARK_MODE_STORAGE_KEY,
+  DEFAULT_HOURLY_RATE,
+  JOBS_STORAGE_KEY,
+  clearJobStorage,
+  cloneDefaultItems,
+  createDefaultJobData,
+  getInitialActiveJobId,
+  getInitialJobs,
+  isPaymentCycle,
+  jobStorageKey,
+  loadJobData,
+  safeSetItem,
+} from "./storage";
 
 dayjs.extend(customParseFormat);
-/* ---------------------- Types ---------------------- */
-type Item = {
-  id: number;
-  name: string;
-  price: number;
-  taxable: boolean;
-  enabled: boolean;
-};
-
-type JobMeta = {
-  id: string;
-  name: string;
-};
-
-type PaymentCycle = "biweekly" | "semi-monthly" | "monthly";
-
-type RosterData = {
-  weekly: Record<string, string>;
-  monthly: Record<string, string>;
-};
-
-type DayHours = {
-  date: string; // "YYYY-MM-DD"
-  start?: string | null; // "HH:MM"
-  end?: string | null;   // "HH:MM"
-  hours?: number | null; // calculated, not user input
-  lunch?: boolean;       // legacy lunch toggle state
-  lunchMinutes?: number | null; // minutes to subtract when lunch is enabled
-  originalHours?: number | null; // <-- add this line
-};
-
-type DetailedDay = {
-  date: string;
-  hours: number;
-  earnings: number; // gross
-  incomeTax: number;
-  employeeInsurance: number;
-  cpp: number;
-  afterTax: number;
-};
-
-type JobExport = {
-  items: Item[];
-  hourlyRate: number;
-  dayHours: DayHours[];
-  startDate: string;
-  currentDate?: string;
-  payCycle?: PaymentCycle;
-  roster?: RosterData;
-};
-
-type AllJobsExport = {
-  type: "w2b_all_jobs";
-  version: 1;
-  activeJobId: string;
-  jobs: JobMeta[];
-  jobData: Record<string, JobExport>;
-};
-
-type NormalizedJobData = {
-  items: Item[];
-  hourlyRate: number;
-  dayHours: DayHours[];
-  startDate: string;
-  currentDate: Date;
-  payCycle: PaymentCycle;
-  roster: RosterData;
-};
-
-/* -------------------- Constants -------------------- */
-const INCOME_TAX_RATE = 0.117;
-const EMPLOYEE_INSURANCE_RATE = 0.0164;
-const CPP_RATE = 0.05482;
-const BIWEEKLY_TAXFREE_THRESHOLD = 88;
-const BIWEEKLY_BONUS_RATE = 0.04; // 4% vacation pay per cycle
-const WEEKLY_OVERTIME_THRESHOLD = 44;
-const OVERTIME_MULTIPLIER = 1.5;
-const DEFAULT_LUNCH_MINUTES = 30;
-
-const defaultItems: Item[] = [
-  { id: 1, name: "Rent", price: 0, taxable: false, enabled: true },
-  { id: 2, name: "Food / Groceries", price: 0, taxable: true, enabled: true },
-  { id: 3, name: "Transportation", price: 0, taxable: true, enabled: true },
-];
-
-const round2 = (n: number) => Math.round(n * 100) / 100;
-const ymd = (d: Date) => d.toISOString().slice(0, 10);
-const parseYmdLocal = (dateStr: string) => {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  return new Date(y, (m || 1) - 1, d || 1);
-};
-
-const clampLunchMinutes = (value?: number | null) => {
-  if (value == null) return DEFAULT_LUNCH_MINUTES;
-  const n = Number(value);
-  if (!Number.isFinite(n)) return DEFAULT_LUNCH_MINUTES;
-  return Math.max(0, Math.min(180, Math.round(n)));
-};
-
-const getLunchMinutes = (entry?: DayHours | null) => {
-  if (!entry) return 0;
-  if (entry.lunchMinutes != null) return clampLunchMinutes(entry.lunchMinutes);
-  if (entry.lunch === false) return 0;
-  return DEFAULT_LUNCH_MINUTES;
-};
-
-const getOriginalHours = (entry: DayHours) => {
-  if (entry.originalHours != null) return entry.originalHours;
-  if (entry.hours != null && !entry.start && !entry.end) return entry.hours;
-  return null;
-};
-
-const DEFAULT_JOB_ID = "default";
-const DEFAULT_JOB_NAME = "Main Job";
-const JOBS_STORAGE_KEY = "w2b_jobs";
-const ACTIVE_JOB_STORAGE_KEY = "w2b_activeJob";
-const LEGACY_STORAGE_KEYS = {
-  items: "w2b_items",
-  hourlyRate: "w2b_hourlyRate",
-  dayHours: "w2b_history",
-  startDate: "w2b_startDate",
-  currentDate: "w2b_currentDate",
-  payCycle: "w2b_payCycle",
-  roster: "w2b_roster",
-} as const;
-
-const jobStorageKey = (jobId: string, key: keyof typeof LEGACY_STORAGE_KEYS) => `w2b_job_${jobId}_${key}`;
-
-const safeParse = <T,>(raw: string | null, fallback: T): T => {
-  if (!raw) return fallback;
-  try {
-    const parsed = JSON.parse(raw) as T;
-    return parsed == null ? fallback : parsed;
-  } catch {
-    return fallback;
-  }
-};
-
-const safeSetItem = (key: string, value: string) => {
-  try {
-    localStorage.setItem(key, value);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-const cloneDefaultItems = () => defaultItems.map(item => ({ ...item }));
-
-const createDefaultJobData = () => ({
-  items: cloneDefaultItems(),
-  hourlyRate: 17.6,
-  dayHours: [] as DayHours[],
-  startDate: ymd(getTorontoToday()),
-  currentDate: getTorontoToday(),
-  payCycle: "biweekly" as PaymentCycle,
-  roster: { weekly: {}, monthly: {} },
-});
-
-const getInitialJobs = (): JobMeta[] => {
-  const stored = safeParse<JobMeta[]>(localStorage.getItem(JOBS_STORAGE_KEY), []);
-  return stored.length ? stored : [{ id: DEFAULT_JOB_ID, name: DEFAULT_JOB_NAME }];
-};
-
-const getInitialActiveJobId = (jobs: JobMeta[]): string => {
-  const stored = localStorage.getItem(ACTIVE_JOB_STORAGE_KEY);
-  if (stored && jobs.some(job => job.id === stored)) return stored;
-  return jobs[0]?.id || DEFAULT_JOB_ID;
-};
-
-const readJobStorage = (jobId: string, key: keyof typeof LEGACY_STORAGE_KEYS) => {
-  const scoped = localStorage.getItem(jobStorageKey(jobId, key));
-  if (scoped != null) return scoped;
-  if (jobId === DEFAULT_JOB_ID) {
-    return localStorage.getItem(LEGACY_STORAGE_KEYS[key]);
-  }
-  return null;
-};
-
-const loadJobData = (jobId: string) => {
-  const fallback = createDefaultJobData();
-  const items = safeParse<Item[]>(readJobStorage(jobId, "items"), fallback.items);
-  const hourlyRateRaw = readJobStorage(jobId, "hourlyRate");
-  const hourlyRate = hourlyRateRaw != null && !isNaN(Number(hourlyRateRaw)) ? Number(hourlyRateRaw) : fallback.hourlyRate;
-  const dayHours = safeParse<DayHours[]>(readJobStorage(jobId, "dayHours"), fallback.dayHours);
-  const startDate = readJobStorage(jobId, "startDate") || fallback.startDate;
-  const currentDateRaw = readJobStorage(jobId, "currentDate");
-  const currentDateCandidate = currentDateRaw ? new Date(currentDateRaw) : fallback.currentDate;
-  const currentDate = isNaN(currentDateCandidate.getTime()) ? fallback.currentDate : currentDateCandidate;
-  const payCycleRaw = readJobStorage(jobId, "payCycle");
-  const payCycle = payCycleRaw === "biweekly" || payCycleRaw === "semi-monthly" || payCycleRaw === "monthly"
-    ? payCycleRaw
-    : fallback.payCycle;
-  const roster = safeParse<RosterData>(readJobStorage(jobId, "roster"), fallback.roster);
-  return { items, hourlyRate, dayHours, startDate, currentDate, payCycle, roster };
-};
-
-const clearJobStorage = (jobId: string) => {
-  (Object.keys(LEGACY_STORAGE_KEYS) as Array<keyof typeof LEGACY_STORAGE_KEYS>).forEach(key => {
-    localStorage.removeItem(jobStorageKey(jobId, key));
-    if (jobId === DEFAULT_JOB_ID) {
-      localStorage.removeItem(LEGACY_STORAGE_KEYS[key]);
-    }
-  });
-};
-
 /* ---------------------- App ------------------------ */
 export default function App(): JSX.Element {
   const initialJobs = getInitialJobs();
@@ -230,10 +70,12 @@ export default function App(): JSX.Element {
   const [startDate, setStartDate] = useState<string>(initialJobData.startDate);
   const [currentDate, setCurrentDate] = useState<Date>(initialJobData.currentDate);
   const [darkMode, setDarkMode] = useState<boolean>(() => {
-    const v = localStorage.getItem("w2b_dark");
+    const v = localStorage.getItem(DARK_MODE_STORAGE_KEY);
     return v ? v === "1" : false;
   });
   const [lang, setLang] = useState<"en" | "zh-tw">("en");
+  // when on, every job's after-tax income counts toward the buy-list progress
+  const [combineJobs, setCombineJobs] = useState<boolean>(() => localStorage.getItem(COMBINE_JOBS_STORAGE_KEY) === "1");
 
   // UI transient
   const [notification, setNotification] = useState<string>("");
@@ -251,7 +93,8 @@ export default function App(): JSX.Element {
   useEffect(() => { safeSetItem(jobStorageKey(activeJobId, "dayHours"), JSON.stringify(dayHours)); }, [dayHours, activeJobId]);
   useEffect(() => { safeSetItem(jobStorageKey(activeJobId, "startDate"), startDate); }, [startDate, activeJobId]);
   useEffect(() => { safeSetItem(jobStorageKey(activeJobId, "currentDate"), currentDate.toISOString()); }, [currentDate, activeJobId]);
-  useEffect(() => { safeSetItem("w2b_dark", darkMode ? "1" : "0"); }, [darkMode]);
+  useEffect(() => { safeSetItem(DARK_MODE_STORAGE_KEY, darkMode ? "1" : "0"); }, [darkMode]);
+  useEffect(() => { safeSetItem(COMBINE_JOBS_STORAGE_KEY, combineJobs ? "1" : "0"); }, [combineJobs]);
 
   useEffect(() => {
     if (darkMode) {
@@ -269,7 +112,7 @@ export default function App(): JSX.Element {
   };
 
   const activeJob = jobs.find(job => job.id === activeJobId) || jobs[0];
-  const useUnlawfulRule = (activeJob?.name ?? "").trim() === "3495";
+  const useUnlawfulRule = isUnlawfulRuleJob(activeJob?.name);
   const useSemiMonthlyRule = payCycle === "semi-monthly";
   const useMonthlyRule = payCycle === "monthly";
 
@@ -516,99 +359,38 @@ export default function App(): JSX.Element {
   };
 
   /* ---------------- helper indices ---------------- */
-  const getIndexInfo = (dateStr: string, baseStart = startDate) => {
-    const start = parseYmdLocal(baseStart);
-    const dt = parseYmdLocal(dateStr);
-    const diffDays = Math.floor((dt.getTime() - start.getTime()) / (1000 * 3600 * 24));
-    return {
-      diffDays,
-      weekIndex: Math.floor(diffDays / 7),
-      biWeekIndex: Math.floor(diffDays / 14),
-    };
-  };
+  const getIndexInfo = (dateStr: string, baseStart = startDate) => calcIndexInfo(dateStr, baseStart);
 
   /* ---------------- compute detailed days ---------------- */
-  const detailedHistory = useMemo((): DetailedDay[] => {
-    const entries = dayHours.filter(d => d.hours != null && !isNaN(d.hours!)) as { date: string; hours: number; }[];
-    if (entries.length === 0) return [];
-
-    const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
-
-    const weeklyWorked = new Map<number, number>();
-    const biWeeklyTotals = new Map<number, number>();
-    for (const r of sorted) {
-      const { biWeekIndex } = getIndexInfo(r.date);
-      biWeeklyTotals.set(biWeekIndex, (biWeeklyTotals.get(biWeekIndex) || 0) + (r.hours || 0));
-    }
-
-    const results: DetailedDay[] = [];
-
-    for (const r of sorted) {
-      const h = r.hours || 0;
-      if (h <= 0) {
-        results.push({ date: r.date, hours: 0, earnings: 0, incomeTax: 0, employeeInsurance: 0, cpp: 0, afterTax: 0 });
-        continue;
-      }
-
-      const { weekIndex, biWeekIndex } = getIndexInfo(r.date);
-      const biWeekHours = biWeeklyTotals.get(biWeekIndex) || 0;
-
-      // 4% vacation pay for all hours in this bi-week
-      const bonusMultiplier = 1 + BIWEEKLY_BONUS_RATE;
-
-      let earnings = 0;
-      let taxableEarnings = 0;
-
-      if (useUnlawfulRule) {
-        // Calculate tax-free hours for this day (only for the unlawful rule job)
-        let dayTaxFree = 0;
-        if (biWeekHours > BIWEEKLY_TAXFREE_THRESHOLD && biWeekHours > 0) {
-          const extra = biWeekHours - BIWEEKLY_TAXFREE_THRESHOLD;
-          dayTaxFree = round2((h / biWeekHours) * extra);
-          dayTaxFree = Math.min(dayTaxFree, h);
-        }
-
-        earnings = h * hourlyRate * bonusMultiplier;
-        const taxableHours = Math.max(0, h - dayTaxFree);
-        taxableEarnings = taxableHours * hourlyRate * bonusMultiplier;
-      } else {
-        const workedSoFar = weeklyWorked.get(weekIndex) || 0;
-        const regularHours = Math.max(0, Math.min(h, WEEKLY_OVERTIME_THRESHOLD - workedSoFar));
-        const overtimeHours = Math.max(0, h - regularHours);
-        weeklyWorked.set(weekIndex, workedSoFar + h);
-
-        const regularEarnings = regularHours * hourlyRate * bonusMultiplier;
-        const overtimeEarnings = overtimeHours * hourlyRate * OVERTIME_MULTIPLIER * bonusMultiplier;
-        earnings = regularEarnings + overtimeEarnings;
-        taxableEarnings = earnings;
-      }
-
-      const incomeTax = round2(taxableEarnings * INCOME_TAX_RATE);
-      const employeeInsurance = round2(taxableEarnings * EMPLOYEE_INSURANCE_RATE);
-      const cpp = round2(taxableEarnings * CPP_RATE);
-
-      const afterTax = round2(earnings - incomeTax - employeeInsurance - cpp);
-
-      results.push({
-        date: r.date,
-        hours: h,
-        earnings: round2(earnings),
-        incomeTax,
-        employeeInsurance,
-        cpp,
-        afterTax,
-      });
-    }
-
-    return results;
-  }, [dayHours, hourlyRate, startDate, useUnlawfulRule]);
+  const detailedHistory = useMemo(
+    () => computeDetailedDays({ dayHours, hourlyRate, startDate, useUnlawfulRule }),
+    [dayHours, hourlyRate, startDate, useUnlawfulRule]
+  );
 
   /* ---------------- summaries ---------------- */
   const totalEarnedAfterTax = useMemo(() => round2(detailedHistory.reduce((s, d) => s + d.afterTax, 0)), [detailedHistory]);
+
+  // Every job priced on its own hourly rate, start date and payroll rule.
+  // The active job reads from live state; the others from their stored data.
+  const allJobsSummary = useMemo<AllJobsSummary>(() => summarizeJobs(jobs.map(job => {
+    if (job.id === activeJobId) {
+      return { id: job.id, name: job.name, hourlyRate, startDate, dayHours };
+    }
+    const stored = loadJobData(job.id);
+    return {
+      id: job.id,
+      name: job.name,
+      hourlyRate: stored.hourlyRate,
+      startDate: stored.startDate,
+      dayHours: stored.dayHours,
+    };
+  })), [jobs, activeJobId, hourlyRate, startDate, dayHours]);
+
+  const earnedForProgress = combineJobs ? allJobsSummary.totalAfterTax : totalEarnedAfterTax;
   const totalItemPrice = useMemo(() => items.filter(i => i.enabled).reduce((s, i) => s + (i.price || 0), 0), [items]);
   const totalItemTax = useMemo(() => items.filter(i => i.enabled && i.taxable).reduce((s, i) => s + (i.price || 0) * INCOME_TAX_RATE, 0), [items]);
   const totalAfterTaxItemPrice = useMemo(() => round2(totalItemPrice + totalItemTax), [totalItemPrice, totalItemTax]);
-  const progressPct = useMemo(() => (totalAfterTaxItemPrice > 0 ? Math.min(100, round2((totalEarnedAfterTax / totalAfterTaxItemPrice) * 100)) : 0), [totalAfterTaxItemPrice, totalEarnedAfterTax]);
+  const progressPct = useMemo(() => (totalAfterTaxItemPrice > 0 ? Math.min(100, round2((earnedForProgress / totalAfterTaxItemPrice) * 100)) : 0), [totalAfterTaxItemPrice, earnedForProgress]);
 
   // pay-period summary (hours / earnings / tax)
   const biWeeklySummary = useMemo(() => {
@@ -806,9 +588,7 @@ export default function App(): JSX.Element {
     const startDate = raw && typeof raw.startDate === "string" && raw.startDate ? raw.startDate : fallback.startDate;
     const currentDateCandidate = raw && raw.currentDate ? new Date(raw.currentDate) : fallback.currentDate;
     const currentDate = isNaN(currentDateCandidate.getTime()) ? fallback.currentDate : currentDateCandidate;
-    const payCycle = raw && (raw.payCycle === "biweekly" || raw.payCycle === "semi-monthly" || raw.payCycle === "monthly")
-      ? raw.payCycle
-      : fallback.payCycle;
+    const payCycle = raw && isPaymentCycle(raw.payCycle) ? raw.payCycle : fallback.payCycle;
     const roster = raw && raw.roster && typeof raw.roster === "object"
       ? {
           weekly: (raw.roster as any).weekly && typeof (raw.roster as any).weekly === "object" ? (raw.roster as any).weekly : {},
@@ -948,7 +728,7 @@ export default function App(): JSX.Element {
     persistJobData(activeJobId);
     safeSetItem(JOBS_STORAGE_KEY, JSON.stringify(jobs));
     safeSetItem(ACTIVE_JOB_STORAGE_KEY, activeJobId);
-    safeSetItem("w2b_dark", darkMode ? "1" : "0");
+    safeSetItem(DARK_MODE_STORAGE_KEY, darkMode ? "1" : "0");
     notify("Saved");
   };
 
@@ -957,7 +737,7 @@ export default function App(): JSX.Element {
     clearJobStorage(activeJobId);
     setItems(cloneDefaultItems());
     setDayHours([]);
-    setHourlyRate(17.6);
+    setHourlyRate(DEFAULT_HOURLY_RATE);
     setPayCycle("biweekly");
     setRoster({ weekly: {}, monthly: {} });
     setStartDate(ymd(getTorontoToday()));
@@ -1094,6 +874,13 @@ export default function App(): JSX.Element {
       okClear: "OK, Clear",
       monthReset: "This month's hours reset",
       invalidHour: "Invalid hour",
+      allJobs: "All Jobs",
+      combineJobsLabel: "Count all jobs toward progress",
+      jobRate: "Rate",
+      jobHours: "Hours",
+      jobAfterTax: "After Tax",
+      combinedTotal: "Combined Total",
+      combinedEarned: "All Jobs After Tax",
       disclaimerLine1: "This website is generated by Ming and his AI friend, actual results may vary.",
       privacyLine: "Privacy: This is a front-end only app. All data stays in your browser local storage.",
       disclaimerLine2: "Check my profile to know more about me!",
@@ -1161,6 +948,13 @@ export default function App(): JSX.Element {
       okClear: "確認清除",
       monthReset: "已重設本月工時",
       invalidHour: "無效的工時",
+      allJobs: "所有工作",
+      combineJobsLabel: "合併所有工作計算進度",
+      jobRate: "時薪",
+      jobHours: "工時",
+      jobAfterTax: "稅後",
+      combinedTotal: "合併總計",
+      combinedEarned: "所有工作稅後收入",
       disclaimerLine1: "此網站由 Ming 及其 AI 朋友建立，實際結果可能會不同。",
       privacyLine: "隱私權：此為純前端應用，所有資料僅保存在你的瀏覽器本機儲存中。",
       disclaimerLine2: "查看我的個人檔案以了解更多！",
@@ -1218,6 +1012,12 @@ export default function App(): JSX.Element {
             <div className="label">{labels[lang].totalEarned}</div>
             <div className="value">${totalEarnedAfterTax.toFixed(2)}</div>
           </div>
+          {jobs.length > 1 && (
+            <div className="info-item">
+              <div className="label">{labels[lang].combinedEarned}</div>
+              <div className="value">${allJobsSummary.totalAfterTax.toFixed(2)}</div>
+            </div>
+          )}
           <div className="info-item">
             <div className="label">{labels[lang].totalItem}</div>
             <div className="value">${totalAfterTaxItemPrice.toFixed(2)}</div>
@@ -1235,6 +1035,49 @@ export default function App(): JSX.Element {
           <div className="progress-number">{progressPct.toFixed(2)}%</div>
         </div>
       </div>
+
+      {/* All jobs, each on its own hourly rate */}
+      {jobs.length > 1 && (
+        <div className="card all-jobs-card">
+          <h3>{labels[lang].allJobs}</h3>
+          <div className="items-scroll">
+            <table className="items-table all-jobs-table">
+              <thead>
+                <tr>
+                  <th>{labels[lang].job}</th>
+                  <th style={{ width: 110 }}>{labels[lang].jobRate}</th>
+                  <th style={{ width: 100 }}>{labels[lang].jobHours}</th>
+                  <th style={{ width: 140 }}>{labels[lang].jobAfterTax}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allJobsSummary.jobs.map(job => (
+                  <tr key={job.id} className={job.id === activeJobId ? "active-job-row" : ""}>
+                    <td>{job.name}</td>
+                    <td>${job.hourlyRate.toFixed(2)}</td>
+                    <td>{job.hours.toFixed(2)}</td>
+                    <td>${job.afterTax.toFixed(2)}</td>
+                  </tr>
+                ))}
+                <tr className="all-jobs-total">
+                  <td><strong>{labels[lang].combinedTotal}</strong></td>
+                  <td>—</td>
+                  <td><strong>{allJobsSummary.totalHours.toFixed(2)}</strong></td>
+                  <td><strong>${allJobsSummary.totalAfterTax.toFixed(2)}</strong></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <label className="combine-jobs-toggle">
+            <input
+              type="checkbox"
+              checked={combineJobs}
+              onChange={e => setCombineJobs(e.target.checked)}
+            />
+            <span>{labels[lang].combineJobsLabel}</span>
+          </label>
+        </div>
+      )}
 
       {/* Controls (note: Prev / Next moved to calendar header) */}
       <div className="card controls">
@@ -1775,14 +1618,6 @@ const BIWEEK_COLORS = [
   "#f3e5f5", // light purple
   "#f9fbe7", // light lime
 ];
-
-function getTorontoToday(): Date {
-  // Get Toronto date parts
-  const now = new Date();
-  const torontoParts = now.toLocaleDateString("en-CA", { timeZone: "America/Toronto" }).split("-");
-  // Build a Date object for midnight Toronto time
-  return new Date(`${torontoParts[0]}-${torontoParts[1]}-${torontoParts[2]}T00:00:00-04:00`);
-}
 
 function CustomTimeInput({
   value,
