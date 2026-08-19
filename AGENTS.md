@@ -90,18 +90,37 @@ Keep all three fallbacks intact unless the user explicitly wants to drop old dat
 
 ## Calculation rules
 
-Constants in `src/calc.ts` (rates are hard-coded, not configurable in the UI):
+Payroll constants in `src/calc.ts` (hard-coded, not configurable in the UI):
 
 | Constant | Value | Meaning |
 | --- | --- | --- |
-| `INCOME_TAX_RATE` | 0.117 | income tax; also applied to taxable items' price |
-| `EMPLOYEE_INSURANCE_RATE` | 0.0164 | EI |
-| `CPP_RATE` | 0.05482 | CPP |
 | `BIWEEKLY_BONUS_RATE` | 0.04 | 4% vacation pay, applied to every hour |
 | `WEEKLY_OVERTIME_THRESHOLD` | 44 | hours/week before overtime |
 | `OVERTIME_MULTIPLIER` | 1.5 | overtime rate |
 | `BIWEEKLY_TAXFREE_THRESHOLD` | 88 | only used by the "unlawful" rule below |
 | `DEFAULT_LUNCH_MINUTES` | 30 | default lunch deduction |
+
+### Tax and payroll deductions
+
+Rates live in `src/tax.ts`, keyed by calendar year (`TAX_YEARS`, currently 2025 and 2026).
+`getTaxYearRates(year)` clamps unknown years to the nearest entry, so old records still price.
+Each year holds federal and Ontario brackets, both basic personal amounts, the Canada
+employment amount, the Ontario surtax, tax reduction and health premium bands, CPP
+(rate, $3,500 exemption, YMPE, CPP2 rate, YAMPE), EI (rate, maximum insurable earnings), and
+`salesTax` — Ontario HST, used for shopping-list items and **not** a payroll rate. Add a new
+year each January rather than leaning on the clamp; verify every figure against CRA's T4127.
+
+Deductions follow the shape of CRA's T4127 formulas and are computed **per pay period**, not
+per day: annualize the period's taxable pay, apply the year's brackets and credits, divide
+back down, then spread the result across the period's days in proportion to their taxable
+earnings. Annual caps (YMPE, YAMPE, maximum insurable earnings) are tracked year-to-date and
+reset each calendar year; they are tracked per job, which is correct, because the annual
+maximums restart with each employer. A period's tax year comes from its **end** date, so a
+period straddling New Year is priced consistently.
+
+These are withholding figures. Refundable credits settled at filing — the Ontario LIFT credit
+and the Canada Workers Benefit — are deliberately absent, exactly as they are absent from
+T4127, so a low earner's real year-end tax is lower than the total withheld here.
 
 `computeDetailedDays` prices one job's days. Two payroll modes:
 
@@ -114,12 +133,17 @@ Constants in `src/calc.ts` (rates are hard-coded, not configurable in the UI):
 That magic string is intentional. Don't "clean it up" without asking.
 
 Weeks and bi-weeks are indexed by day offset from the job's `startDate` (`getIndexInfo` →
-`Math.floor(diffDays / 7)` and `/ 14`), not by calendar week. Date strings are parsed with
+`Math.floor(diffDays / 7)` and `/ 14`), not by calendar week. That offset counts whole
+calendar days via `Date.UTC`; subtracting raw timestamps is an hour short across a
+daylight-saving change and shifts every later date into the wrong week and pay period. Date strings are parsed with
 `parseYmdLocal` (local midnight) — do **not** use `new Date("YYYY-MM-DD")`, which is UTC and
 shifts the day. `getTorontoToday()` anchors "today" to Toronto time.
 
-`payCycle` affects only how the summary table groups periods (`getSemiMonthlyInfo` splits a
-month at the 15th, `getMonthlyInfo` uses whole months), never the per-day pay math.
+`payCycle` (`biweekly` | `semi-monthly` | `monthly`) sets the deduction period: it decides how
+the CPP basic exemption is prorated and what income is annualized, so it does change the
+numbers. `getPeriodInfo`/`getPeriodKey` in `calc.ts` do the bucketing; the summary table's own
+`getSemiMonthlyInfo`/`getMonthlyInfo` helpers produce the same buckets plus display labels.
+Gross pay itself (overtime, vacation pay) is unaffected by the cycle.
 
 ### Multiple jobs
 
@@ -182,7 +206,10 @@ Cover every change with tests — the user asks for this on all work in this rep
 ## Known rough edges
 
 - Tailwind is configured but inert (see Stack).
-- All tax rates are hard-coded constants with no UI to change them.
+- Tax rates are hard-coded per year in `src/tax.ts` with no UI to change them, and no year
+  past the newest table entry is real — it silently clamps.
+- Only the credits every hourly employee has are modelled. Dependants, tuition and the TD1
+  "other credits" box are not, so anyone claiming those has less tax withheld than shown.
 - `CI=true npm run build` fails on pre-existing lint issues (see Commands).
 - The app displays a disclaimer that results may vary; it's an estimator, not payroll software.
   Keep that framing in any user-facing copy.

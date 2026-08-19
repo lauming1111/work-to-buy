@@ -4,16 +4,14 @@ import dayjs, { Dayjs } from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 import { TimePicker } from "antd";
 import ram from './fun-images/rick-y-morty-rick.png';
+import { getSalesTaxRate } from "./tax";
 import {
   AllJobsExport,
   AllJobsSummary,
   BIWEEKLY_BONUS_RATE,
   BIWEEKLY_TAXFREE_THRESHOLD,
-  CPP_RATE,
   DayHours,
   DetailedDay,
-  EMPLOYEE_INSURANCE_RATE,
-  INCOME_TAX_RATE,
   Item,
   JobExport,
   JobMeta,
@@ -363,8 +361,8 @@ export default function App(): JSX.Element {
 
   /* ---------------- compute detailed days ---------------- */
   const detailedHistory = useMemo(
-    () => computeDetailedDays({ dayHours, hourlyRate, startDate, useUnlawfulRule }),
-    [dayHours, hourlyRate, startDate, useUnlawfulRule]
+    () => computeDetailedDays({ dayHours, hourlyRate, startDate, useUnlawfulRule, payCycle }),
+    [dayHours, hourlyRate, startDate, useUnlawfulRule, payCycle]
   );
 
   /* ---------------- summaries ---------------- */
@@ -374,7 +372,7 @@ export default function App(): JSX.Element {
   // The active job reads from live state; the others from their stored data.
   const allJobsSummary = useMemo<AllJobsSummary>(() => summarizeJobs(jobs.map(job => {
     if (job.id === activeJobId) {
-      return { id: job.id, name: job.name, hourlyRate, startDate, dayHours };
+      return { id: job.id, name: job.name, hourlyRate, startDate, dayHours, payCycle };
     }
     const stored = loadJobData(job.id);
     return {
@@ -383,12 +381,14 @@ export default function App(): JSX.Element {
       hourlyRate: stored.hourlyRate,
       startDate: stored.startDate,
       dayHours: stored.dayHours,
+      payCycle: stored.payCycle,
     };
-  })), [jobs, activeJobId, hourlyRate, startDate, dayHours]);
+  })), [jobs, activeJobId, hourlyRate, startDate, dayHours, payCycle]);
 
   const earnedForProgress = combineJobs ? allJobsSummary.totalAfterTax : totalEarnedAfterTax;
   const totalItemPrice = useMemo(() => items.filter(i => i.enabled).reduce((s, i) => s + (i.price || 0), 0), [items]);
-  const totalItemTax = useMemo(() => items.filter(i => i.enabled && i.taxable).reduce((s, i) => s + (i.price || 0) * INCOME_TAX_RATE, 0), [items]);
+  const salesTaxRate = useMemo(() => getSalesTaxRate(currentDate.getFullYear()), [currentDate]);
+  const totalItemTax = useMemo(() => items.filter(i => i.enabled && i.taxable).reduce((s, i) => s + (i.price || 0) * salesTaxRate, 0), [items, salesTaxRate]);
   const totalAfterTaxItemPrice = useMemo(() => round2(totalItemPrice + totalItemTax), [totalItemPrice, totalItemTax]);
   const progressPct = useMemo(() => (totalAfterTaxItemPrice > 0 ? Math.min(100, round2((earnedForProgress / totalAfterTaxItemPrice) * 100)) : 0), [totalAfterTaxItemPrice, earnedForProgress]);
 
@@ -1453,23 +1453,15 @@ export default function App(): JSX.Element {
                 }
               }
 
-              // Deductions for regular hours (unlawful rule display)
-              const incomeTaxRegular = round2(regularEarnings * INCOME_TAX_RATE);
-              const employeeInsuranceRegular = round2(regularEarnings * EMPLOYEE_INSURANCE_RATE);
-              const cppRegular = round2(regularEarnings * CPP_RATE);
-              const afterTaxRegular = round2(regularEarnings - incomeTaxRegular - employeeInsuranceRegular - cppRegular);
-
-              // Deductions for all hours (lawful rule)
-              const incomeTaxTotal = periodDetails.reduce((sum, d) => sum + d.incomeTax, 0);
-              const employeeInsuranceTotal = periodDetails.reduce((sum, d) => sum + d.employeeInsurance, 0);
-              const cppTotal = periodDetails.reduce((sum, d) => sum + d.cpp, 0);
-              const afterTaxTotal = periodDetails.reduce((sum, d) => sum + d.afterTax, 0);
-
-              const displayIncomeTax = useUnlawfulRule ? incomeTaxRegular : incomeTaxTotal;
-              const displayEmployeeInsurance = useUnlawfulRule ? employeeInsuranceRegular : employeeInsuranceTotal;
-              const displayCpp = useUnlawfulRule ? cppRegular : cppTotal;
-              const displayNet = useUnlawfulRule ? afterTaxRegular : afterTaxTotal;
-              const displayTakeHome = useUnlawfulRule ? afterTaxRegular + overtimeEarnings : afterTaxTotal;
+              // Deductions come from the calculator, which already leaves the
+              // bi-weekly rule's untaxed hours out of the taxable base.
+              const displayIncomeTax = periodDetails.reduce((sum, d) => sum + d.incomeTax, 0);
+              const displayEmployeeInsurance = periodDetails.reduce((sum, d) => sum + d.employeeInsurance, 0);
+              const displayCpp = periodDetails.reduce((sum, d) => sum + d.cpp, 0);
+              const displayTakeHome = periodDetails.reduce((sum, d) => sum + d.afterTax, 0);
+              // Under the bi-weekly rule the over-threshold hours are paid untaxed,
+              // so net pay on the taxed portion is take-home less that cash.
+              const displayNet = useUnlawfulRule ? displayTakeHome - overtimeEarnings : displayTakeHome;
 
               return (
                 <tr key={b.index}>

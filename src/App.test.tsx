@@ -246,9 +246,9 @@ test("app does not crash if localStorage is full", () => {
 
 const seedJob = (id: string, rate: string, hours: number) => {
   localStorage.setItem(jobStorageKey(id, "hourlyRate"), rate);
-  localStorage.setItem(jobStorageKey(id, "startDate"), "2024-01-01");
-  localStorage.setItem(jobStorageKey(id, "currentDate"), new Date("2024-01-15T00:00:00Z").toISOString());
-  localStorage.setItem(jobStorageKey(id, "dayHours"), JSON.stringify([{ date: "2024-01-02", hours }]));
+  localStorage.setItem(jobStorageKey(id, "startDate"), "2026-01-01");
+  localStorage.setItem(jobStorageKey(id, "currentDate"), new Date("2026-01-15T00:00:00Z").toISOString());
+  localStorage.setItem(jobStorageKey(id, "dayHours"), JSON.stringify([{ date: "2026-01-02", hours }]));
 };
 
 const seedTwoJobs = () => {
@@ -257,8 +257,8 @@ const seedTwoJobs = () => {
     { id: "studio", name: "Studio" },
   ]));
   localStorage.setItem("w2b_activeJob", "cafe");
-  seedJob("cafe", "20", 8);   // 8h at $20 -> $135.08 after tax
-  seedJob("studio", "30", 8); // 8h at $30 -> $202.63 after tax
+  seedJob("cafe", "20", 8);   // 8h at $20 -> $161.80 after tax
+  seedJob("studio", "30", 8); // 8h at $30 -> $238.69 after tax
   localStorage.setItem(jobStorageKey("cafe", "items"), JSON.stringify([
     { id: 1, name: "Laptop", price: 500, taxable: false, enabled: true },
   ]));
@@ -281,8 +281,8 @@ test("lists every job with its own hourly rate", () => {
   expect(table.getByText("Studio")).toBeInTheDocument();
   expect(table.getByText("$20.00")).toBeInTheDocument();
   expect(table.getByText("$30.00")).toBeInTheDocument();
-  expect(table.getByText("$135.08")).toBeInTheDocument();
-  expect(table.getByText("$202.63")).toBeInTheDocument();
+  expect(table.getByText("$161.80")).toBeInTheDocument();
+  expect(table.getByText("$238.69")).toBeInTheDocument();
 });
 
 test("shows the combined after-tax total across jobs", () => {
@@ -290,7 +290,7 @@ test("shows the combined after-tax total across jobs", () => {
   render(<App />);
 
   const table = within(allJobsTable());
-  expect(table.getByText("$337.71")).toBeInTheDocument(); // 135.08 + 202.63
+  expect(table.getByText("$400.49")).toBeInTheDocument(); // 161.80 + 238.69
   expect(table.getByText("16.00")).toBeInTheDocument();   // 8h + 8h
 });
 
@@ -298,13 +298,13 @@ test("combining jobs counts every job toward the buy-list progress", () => {
   seedTwoJobs();
   render(<App />);
 
-  // active job only: 135.08 / 500
-  expect(screen.getByText("27.02%")).toBeInTheDocument();
+  // active job only: 161.80 / 500
+  expect(screen.getByText("32.36%")).toBeInTheDocument();
 
   fireEvent.click(screen.getByLabelText("Count all jobs toward progress"));
 
-  // all jobs: 337.71 / 500
-  expect(screen.getByText("67.54%")).toBeInTheDocument();
+  // all jobs: 400.49 / 500
+  expect(screen.getByText("80.10%")).toBeInTheDocument();
   expect(localStorage.getItem("w2b_combineJobs")).toBe("1");
 });
 
@@ -314,7 +314,7 @@ test("the combine setting is restored from storage", () => {
   render(<App />);
 
   expect((screen.getByLabelText("Count all jobs toward progress") as HTMLInputElement).checked).toBe(true);
-  expect(screen.getByText("67.54%")).toBeInTheDocument();
+  expect(screen.getByText("80.10%")).toBeInTheDocument();
 });
 
 test("switching jobs loads that job's own hourly rate", () => {
@@ -326,7 +326,7 @@ test("switching jobs loads that job's own hourly rate", () => {
 
   expect(rateInput().value).toBe("30");
   // the combined total does not change with the active job
-  expect(within(allJobsTable()).getByText("$337.71")).toBeInTheDocument();
+  expect(within(allJobsTable()).getByText("$400.49")).toBeInTheDocument();
 });
 
 test("editing the rate of one job leaves the other job's earnings alone", () => {
@@ -337,6 +337,34 @@ test("editing the rate of one job leaves the other job's earnings alone", () => 
 
   const table = within(allJobsTable());
   expect(table.getByText("$40.00")).toBeInTheDocument();
-  expect(table.getByText("$270.16")).toBeInTheDocument(); // Cafe, 8h at $40
-  expect(table.getByText("$202.63")).toBeInTheDocument(); // Studio, untouched
+  expect(table.getByText("$315.59")).toBeInTheDocument(); // Cafe, 8h at $40
+  expect(table.getByText("$238.69")).toBeInTheDocument(); // Studio, untouched
+});
+
+/* ---------------- shopping list is charged sales tax, not income tax ---------------- */
+
+test("taxable items are charged 13% HST on top of their price", () => {
+  localStorage.setItem("w2b_jobs", JSON.stringify([{ id: "cafe", name: "Cafe" }]));
+  localStorage.setItem("w2b_activeJob", "cafe");
+  seedJob("cafe", "20", 8);
+  localStorage.setItem(jobStorageKey("cafe", "items"), JSON.stringify([
+    { id: 1, name: "Laptop", price: 1000, taxable: true, enabled: true },
+  ]));
+  render(<App />);
+
+  // $1,000 + 13% HST = $1,130, so $161.80 earned is 14.32% of the goal
+  expect(screen.getByText("14.32%")).toBeInTheDocument();
+});
+
+test("items marked non-taxable carry no sales tax", () => {
+  localStorage.setItem("w2b_jobs", JSON.stringify([{ id: "cafe", name: "Cafe" }]));
+  localStorage.setItem("w2b_activeJob", "cafe");
+  seedJob("cafe", "20", 8);
+  localStorage.setItem(jobStorageKey("cafe", "items"), JSON.stringify([
+    { id: 1, name: "Rent", price: 1000, taxable: false, enabled: true },
+  ]));
+  render(<App />);
+
+  // no HST, so $161.80 of a flat $1,000 goal
+  expect(screen.getByText("16.18%")).toBeInTheDocument();
 });
