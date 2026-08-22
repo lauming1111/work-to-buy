@@ -139,6 +139,34 @@ daylight-saving change and shifts every later date into the wrong week and pay p
 `parseYmdLocal` (local midnight) — do **not** use `new Date("YYYY-MM-DD")`, which is UTC and
 shifts the day. `getTorontoToday()` anchors "today" to Toronto time.
 
+## Layout and responsiveness
+
+`src/App.css` is **mobile-first**. Base rules target a phone; two `min-width`
+queries layer on top — `700px` (tablet) and `1100px` (desktop). Keep it that way.
+Do not add `max-width` queries or `!important`: the stylesheet this replaced was
+desktop-first with twenty overlapping queries at six breakpoints, nine competing
+`grid-template-columns` on `.cal-grid`, and `!important` wars between them.
+
+Design tokens live in `:root` — `--s1`..`--s5` spacing, `--fs-xs`..`--fs-lg` type,
+`--r1`..`--r3` radii. Use them instead of new magic numbers. `--fs-input` is 16px
+and must stay at least that: anything smaller makes iOS zoom the page on focus.
+
+`useIsNarrow()` in `App.tsx` mirrors the 700px breakpoint in JS for the two places
+markup has to differ, not just styling. It listens to both the media query and
+`resize`, because some environments resize without firing the query's change event.
+
+- **Calendar.** Below 700px each `.cal-cell` is a compact tap target showing only
+  day number, hours and pay; tapping it opens the `.day-sheet` bottom sheet.
+  Above, the same controls render inline in the cell. Both come from one
+  `renderDayControls(dateStr)`, so add day inputs there and they appear in both.
+- **Wide tables.** `.stack-table` (the period summary and details tables) turns
+  each row into a labelled card below 700px, reading the column name from each
+  cell's `data-label`. **Every `<td>` in those tables needs a `data-label`** or it
+  renders unlabelled on phones. Above 700px they revert to normal tables.
+- The measured `weekRowTemplate` that aligns roster rows to calendar rows is
+  skipped on phones — the roster stacks below the calendar there, and applying
+  compact cell heights to it made the roster items overlap.
+
 `payCycle` (`biweekly` | `semi-monthly` | `monthly`) sets the deduction period: it decides how
 the CPP basic exemption is prorated and what income is annualized, so it does change the
 numbers. `getPeriodInfo`/`getPeriodKey` in `calc.ts` do the bucketing; the summary table's own
@@ -211,5 +239,8 @@ Cover every change with tests — the user asks for this on all work in this rep
 - Only the credits every hourly employee has are modelled. Dependants, tuition and the TD1
   "other credits" box are not, so anyone claiming those has less tax withheld than shown.
 - `CI=true npm run build` fails on pre-existing lint issues (see Commands).
+- `tsconfig.json` targets ES5 without `downlevelIteration`, so spreading a
+  `NodeList` (`[...el.querySelectorAll(..)]`) compiles under Jest but breaks
+  `npm run build`. Use `Array.from(..)`.
 - The app displays a disclaimer that results may vary; it's an estimator, not payroll software.
   Keep that framing in any user-facing copy.

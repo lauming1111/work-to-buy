@@ -1,148 +1,297 @@
-:root{
-  --muted:#98a2b3;
-  --bg-light:#f7f8fa;
-  --card-light:#ffffff;
-  --text-dark:#111827;
-  --primary-1:#4f8dfd;
-  --primary-2:#2dc5fa;
-  --accent-green:#28c76f;
-  --amber:#ffc857;
-  --danger:#ff5c7c;
-  --border:#e6eef8;
+/* ==========================================================================
+   Work Record Keeper — mobile first.
+
+   Base rules target a phone. Two min-width breakpoints layer on from there:
+     700px  — tablets: real table layouts, inline calendar day controls
+     1100px — desktop: calendar and roster side by side
+
+   Keep it that way. The previous stylesheet was desktop-first with twenty
+   overlapping max-width queries and nine competing .cal-grid rules, which is
+   why it needed !important to work at all.
+   ========================================================================== */
+
+:root {
+  /* palette */
+  --muted: #98a2b3;
+  --bg-light: #f7f8fa;
+  --card-light: #ffffff;
+  --text-dark: #111827;
+  --primary-1: #4f8dfd;
+  --primary-2: #2dc5fa;
+  --accent-green: #28c76f;
+  --amber: #ffc857;
+  --danger: #ff5c7c;
+  --border: #e6eef8;
+
+  /* spacing scale */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+
+  /* type scale */
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-md: 15px;
+  --fs-lg: 18px;
+
+  /* Anything the user types into on a phone must be >=16px or iOS zooms in. */
+  --fs-input: 16px;
+
+  --r1: 8px;
+  --r2: 10px;
+  --r3: 12px;
+  --r-pill: 999px;
+
+  --surface-sunken: rgba(0, 0, 0, 0.03);
+  --hairline: rgba(0, 0, 0, 0.06);
 }
 
-/* container background changes via class on root element */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  /* Never 100vw: it ignores the scrollbar gutter and forces sideways scroll. */
+  width: 100%;
+  max-width: 100%;
+  background: var(--bg-light);
+}
+body.dark,
+html.dark { background: #000; }
+
+/* ---------------------------------------------------------------- shell -- */
+
 .big-container {
   font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-  margin: 12px auto;
+  margin: var(--s2) auto;
   max-width: 1800px;
-  width: calc(100% - 24px);
-  padding: 12px;
-  border-radius: 14px;
+  width: calc(100% - var(--s3));
+  padding: var(--s3);
+  border-radius: var(--r3);
   transition: background 0.25s, color 0.25s, border 0.25s;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--s3);
 }
 
-/* light mode */
 .big-container.light {
   background: var(--bg-light);
   color: var(--text-dark);
-  border: 1px solid rgba(16,24,40,0.04);
-  box-shadow: 0 6px 20px rgba(15,23,42,0.05);
+  border: 1px solid rgba(16, 24, 40, 0.04);
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.05);
 }
 
-/* dark mode */
 .big-container.dark {
-  --muted:#9aa9bd;
-  background: linear-gradient(180deg,#07111a,#041018);
+  --muted: #9aa9bd;
+  --surface-sunken: rgba(255, 255, 255, 0.04);
+  --hairline: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, #07111a, #041018);
   color: #e6eef8;
-  border: 1px solid rgba(255,255,255,0.04);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
 }
 
-.title-blob {
-  font-size: 2.6rem;
-  font-weight: 800;
-  margin: 0;
-  line-height: 1;
-  letter-spacing: -1px;
-  color: inherit;
-  text-shadow: 0 6px 20px rgba(79,141,253,0.08);
-  text-align: center;
-}
-
-/* card */
 .card {
-  background: rgba(255,255,255,0.03);
-  border-radius: 12px;
-  padding: 16px;
-  margin: 8px 0;
-  border: 1px solid rgba(255,255,255,0.02);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--r3);
+  padding: var(--s3);
+  margin: 0;
+  border: 1px solid rgba(255, 255, 255, 0.02);
 }
 .big-container.light .card {
   background: var(--card-light);
   border: 1px solid var(--border);
 }
 
-/* info card */
-.info-card h2 { margin: 0 0 8px 0 }
+/* --------------------------------------------------------------- header -- */
+
+header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  align-items: stretch;
+}
+
+.title-blob {
+  font-size: 1.6rem;
+  font-weight: 800;
+  margin: 0;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+  color: inherit;
+  text-align: center;
+}
+
+.header-actions {
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.header-actions .header-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------ job tabs --- */
+
+.job-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+.job-tabs-scroll {
+  display: flex;
+  gap: var(--s2);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-bottom: var(--s1);
+}
+.job-tab {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: transparent;
+  color: inherit;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.big-container.dark .job-tab { border-color: rgba(255, 255, 255, 0.18); }
+.job-tab.active {
+  background: linear-gradient(135deg, var(--primary-1), var(--primary-2));
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 6px 16px rgba(45, 197, 250, 0.25);
+}
+.job-actions {
+  display: flex;
+  gap: var(--s2);
+  align-items: stretch;
+  flex: 0 0 auto;
+}
+.job-actions .btn { white-space: nowrap; }
+
+/* --------------------------------------------------------------- info ---- */
+
+.info-card h2 {
+  margin: 0 0 var(--s2) 0;
+  font-size: 1.05rem;
+}
 .info-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
+  /* Two compact tiles per row on a phone reads far better than four tall ones. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s2);
 }
 .info-item {
-  background: rgba(0,0,0,0.03);
-  padding: 10px;
-  border-radius: 8px;
+  background: var(--surface-sunken);
+  padding: var(--s2);
+  border-radius: var(--r1);
+  min-width: 0;
 }
 .big-container.light .info-item { background: #f3f7ff; }
-.label { font-size: 12px; color: var(--muted) }
-.value { font-size: 18px; font-weight: 700; margin-top: 6px }
+.label {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  display: block;
+  line-height: 1.25;
+}
+.value {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  margin-top: var(--s1);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
 
-/* progress */
-.progress-row { display:flex; align-items:center; gap:12px; margin-top:12px }
-.progress-label { color: var(--muted) }
+.progress-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-top: var(--s3);
+}
+.progress-label {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  flex: 0 0 auto;
+}
 .progress-bar {
-  flex:1; height:14px;
-  background:rgba(0,0,0,0.06);
-  border-radius:10px;
-  overflow:hidden;
-  border:1px solid rgba(255,255,255,0.02);
-}
-.big-container.light .progress-bar { background:#eef4ff }
-.progress-fill {
-  height:100%;
-  background:linear-gradient(90deg,var(--accent-green), #7ef3b9);
-  transition:width .5s ease;
-}
-.progress-number { font-size: 12px; }
-
-/* controls */
-.controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; }
-.controls .small-label { display:block; font-size:12px; color:var(--muted); margin-bottom:6px }
-.control-input {
-  padding:8px;
-  border-radius:8px;
-  border:1px solid rgba(0,0,0,0.06);
-  background:transparent;
-  color:inherit;
-  width: 160px;
-}
-
-/* btns */
-.btn {
-  display: inline-block;
-  padding:10px 14px;
-  border-radius:10px;
-  border:none;
-  cursor:pointer;
-  background:linear-gradient(135deg,#3b82f6,#06b6d4);
-  color:#fff;
-  font-weight:700;
-  transition: transform 0.15s ease;
-  font-size: 1rem;
-}
-.btn:hover { transform: scale(1.03); }
-.btn.small{
-  padding: 4px 10px;
-  border-radius: 8px;
-  font-size: 0.9rem;
-}
-.btn.primary{background:linear-gradient(135deg,var(--primary-1),var(--primary-2))}
-.btn.success{background:linear-gradient(135deg,#2ac48a,#3ee0a1)}
-.btn.warn{background:linear-gradient(135deg,#ffb020,#ffcf61); color:#111}
-.btn.danger{background:linear-gradient(135deg,#ff5c7c,#ff7e97)}
-.btn.sm{padding:6px 8px}
-.btn.export{background:linear-gradient(135deg,#6366f1,#8b5cf6)}
-
-/* file inputs: keep clickable on mobile while visually hidden */
-.file-upload-btn {
-  position: relative;
+  flex: 1;
+  height: 12px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: var(--r2);
   overflow: hidden;
 }
+.big-container.light .progress-bar { background: #eef4ff; }
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-green), #7ef3b9);
+  transition: width 0.5s ease;
+}
+.progress-number {
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+
+/* ------------------------------------------------------------- buttons --- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* 44px keeps every button a comfortable thumb target. */
+  min-height: 44px;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r2);
+  border: none;
+  cursor: pointer;
+  background: linear-gradient(135deg, #3b82f6, #06b6d4);
+  color: #fff;
+  font-weight: 700;
+  font-size: var(--fs-md);
+  line-height: 1.2;
+  text-align: center;
+  transition: transform 0.15s ease;
+}
+.btn:active { transform: scale(0.98); }
+.btn.small {
+  min-height: 36px;
+  padding: var(--s1) var(--s2);
+  border-radius: var(--r1);
+  font-size: var(--fs-sm);
+}
+.btn.sm { padding: var(--s1) var(--s2); }
+.btn.primary { background: linear-gradient(135deg, var(--primary-1), var(--primary-2)); }
+.btn.success { background: linear-gradient(135deg, #2ac48a, #3ee0a1); }
+.btn.warn { background: linear-gradient(135deg, #ffb020, #ffcf61); color: #111; }
+.btn.danger { background: linear-gradient(135deg, #ff5c7c, #ff7e97); }
+.btn.export { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
+.btn.soft-danger {
+  background: linear-gradient(135deg, #ff9a6b, #ff6a6a);
+  color: #fff;
+  box-shadow: 0 6px 14px rgba(255, 106, 106, 0.25);
+}
+.btn.soft-danger:disabled { opacity: 0.5; box-shadow: none; }
+
+@media (hover: hover) {
+  .btn:hover { transform: scale(1.03); }
+}
+
+.file-upload-btn { position: relative; overflow: hidden; }
 .file-input-hidden {
   position: absolute;
   inset: 0;
@@ -152,193 +301,56 @@
   cursor: pointer;
 }
 
-/* job tabs */
-.job-tabs {
+/* Rows of buttons: wrap and share the width instead of stacking full-width. */
+.button-row {
   display: flex;
-  align-items: center;
-  gap: 8px;
   flex-wrap: wrap;
+  gap: var(--s2);
 }
-.job-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  align-items: stretch;
-}
-.job-tabs-scroll {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-  flex: 1 1 auto;
+.button-row > .btn,
+.button-row > .file-upload-btn {
+  flex: 1 1 calc(50% - var(--s2));
   min-width: 0;
-  padding-bottom: 4px;
 }
-.job-tab {
-  flex: 0 0 auto;
-  white-space: nowrap;
-  border: 1px solid rgba(0,0,0,0.12);
+
+/* -------------------------------------------------------------- inputs --- */
+
+.control-input,
+.item-name,
+.cal-input,
+/* the item list's price/name inputs carry no class of their own */
+.items-table input[type="number"],
+.items-table input[type="text"] {
+  padding: var(--s2);
+  border-radius: var(--r1);
+  border: 1px solid var(--hairline);
   background: transparent;
   color: inherit;
-  padding: 6px 12px;
-  border-radius: 999px;
-  cursor: pointer;
-  font-weight: 700;
-  font-size: 0.95rem;
-  white-space: nowrap;
-}
-.big-container.dark .job-tab { border: 1px solid rgba(255,255,255,0.18); }
-.job-tab.active {
-  background: linear-gradient(135deg,var(--primary-1),var(--primary-2));
-  color: #fff;
-  border-color: transparent;
-  box-shadow: 0 6px 16px rgba(45,197,250,0.25);
-}
-.btn.soft-danger{
-  background: linear-gradient(135deg,#ff9a6b,#ff6a6a);
-  color: #fff;
-  box-shadow: 0 6px 14px rgba(255,106,106,0.25);
-}
-.btn.soft-danger:disabled{
-  opacity: 0.5;
-  box-shadow: none;
-}
-
-/* all jobs summary */
-.all-jobs-card h3 { margin-bottom: 10px }
-.all-jobs-table {
+  font-size: var(--fs-input);
   width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
+  min-height: 44px;
 }
-.all-jobs-table th,
-.all-jobs-table td {
-  padding: 8px 6px;
-  border-bottom: 1px solid rgba(0,0,0,0.06);
-  font-size: 14px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+.big-container.light .control-input,
+.big-container.light .item-name,
+.big-container.light .items-table input { background: #fff; }
+
+.controls-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s3);
+  align-items: end;
 }
-.all-jobs-table th {
-  font-size: 12px;
-  font-weight: 600;
+.controls .small-label {
+  display: block;
+  font-size: var(--fs-xs);
   color: var(--muted);
+  margin-bottom: var(--s1);
 }
-.all-jobs-table .aj-name {
-  text-align: left;
-  white-space: normal;
-  word-break: break-word;
-  width: 40%;
-}
-.big-container.dark .all-jobs-table th,
-.big-container.dark .all-jobs-table td {
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-}
-.all-jobs-table .active-job-row td { font-weight: 700 }
-.all-jobs-table .all-jobs-total td {
-  font-weight: 700;
-  border-top: 2px solid rgba(0,0,0,0.12);
-  border-bottom: none;
-}
-.big-container.dark .all-jobs-table .all-jobs-total td {
-  border-top: 2px solid rgba(255,255,255,0.18);
-}
-.combine-jobs-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-  font-size: 14px;
-  cursor: pointer;
-}
-.combine-jobs-toggle input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 auto;
-}
+.controls-fields > div { min-width: 0; }
+.controls-fields .button-row { grid-column: 1 / -1; margin-top: var(--s2); }
+.export-row { justify-content: flex-end; }
 
-@media (max-width: 600px) {
-  .all-jobs-table th,
-  .all-jobs-table td {
-    padding: 6px 3px;
-    font-size: 13px;
-  }
-  .all-jobs-table th { font-size: 11px }
-  .all-jobs-table .aj-name { width: 30% }
-  .combine-jobs-toggle { font-size: 13px }
-}
-
-/* items table */
-.items-scroll { overflow:auto }
-.items-table { width:100%; border-collapse:collapse }
-.items-table th, .items-table td {
-  padding:8px;
-  border-bottom:1px solid rgba(0,0,0,0.06);
-  text-align:center;
-  font-size: 14px;
-}
-.big-container.dark .items-table th, .big-container.dark .items-table td {
-  border-bottom:1px solid rgba(255,255,255,0.03);
-}
-.item-name {
-  width:100%;
-  padding:8px;
-  border-radius:8px;
-  border:1px solid rgba(0,0,0,0.06);
-  background:transparent;
-  color:inherit;
-}
-
-/* calendar grid */
-.calendar-header { 
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 18px; /* Add space above the calendar header */
-}
-.calendar-header .month-title { 
-  flex: none;
-  margin: 0 auto;
-  text-align: center;
-  width: 100%;
-  margin-top: 8px; /* Optional: extra space above the title itself */
-}
-
-.grid-7 { display:grid; grid-template-columns:repeat(7,1fr); gap:10px }
-.cal-head { margin-bottom:8px }
-.cal-head-cell { background:transparent; text-align:center; font-weight:700; color:var(--muted) }
-
-/* default grid for desktop */
-.cal-grid { display:grid; grid-template-columns: repeat(7, minmax(140px, 1fr)); gap:10px }
-.cal-cell {
-  padding:10px;
-  border-radius:10px;
-  min-height:110px;
-  background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.03));
-  display:flex;
-  flex-direction:column;
-  gap:8px;
-  border:1px solid rgba(255,255,255,0.02);
-}
-.big-container.light .cal-cell { background:#fff; border:1px solid rgba(15,23,42,0.04) }
-.cal-cell.empty { background:transparent; border:1px dashed rgba(255,255,255,0.03) }
-.cal-daynum { font-weight:700; color:inherit }
-.cal-input {
-  width:100%;
-  padding:6px;
-  border-radius:8px;
-  border:1px solid rgba(0,0,0,0.06);
-  background:transparent;
-  color:inherit;
-  text-align:center;
-  font-size: 13px;
-}
-.big-container.light .cal-input { background:#f8fafc; color:var(--text-dark) }
-/* Number spinners sit inside the field and push centred text off-centre */
+/* Number spinners push centred text off-centre. */
 .cal-input[type="number"] {
   appearance: textfield;
   -moz-appearance: textfield;
@@ -348,858 +360,558 @@
   -webkit-appearance: none;
   margin: 0;
 }
-.cal-earn { margin-top:auto; color:var(--muted); font-size:12px }
 
-/* Antd TimePicker alignment */
-.cal-input.ant-picker {
-  min-height: 30px;
-  padding: 2px 6px;
-  background: transparent;
-  box-shadow: none;
+/* --------------------------------------------------------- tables: base -- */
+
+.items-scroll,
+.details-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+.items-table,
+.details-table,
+.all-jobs-table {
+  width: 100%;
+  border-collapse: collapse;
 }
-.big-container.light .cal-input.ant-picker {
-  background: #f8fafc;
-}
-.cal-input.ant-picker .ant-picker-input > input {
+.items-table th,
+.items-table td,
+.details-table th,
+.details-table td {
+  padding: var(--s2) var(--s1);
+  border-bottom: 1px solid var(--hairline);
   text-align: center;
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
-.cal-input.ant-picker .ant-picker-suffix {
+.items-table th,
+.details-table th {
+  font-size: var(--fs-xs);
+  font-weight: 600;
   color: var(--muted);
 }
 
-/* today vs start styles */
-.cal-cell.today { outline:3px solid rgba(40, 200, 118, 0.35); box-shadow:inset 0 1px 0 rgba(255,255,255,0.02) }
-.cal-cell.start { outline:3px solid rgba(255,200,87,0.35) }
-
-/* details */
-.details-scroll { overflow:auto }
-.details-table { width:100%; border-collapse:collapse }
-.details-table th, .details-table td {
-  padding:8px;
-  border-bottom:1px solid rgba(0,0,0,0.06);
-  text-align:center;
-  font-size: 14px;
+/* all-jobs summary: fixed layout so four columns fit without scrolling */
+.all-jobs-card h3 { margin: 0 0 var(--s2) 0; font-size: 1rem; }
+.all-jobs-table { table-layout: fixed; }
+.all-jobs-table th,
+.all-jobs-table td {
+  padding: var(--s2) var(--s1);
+  border-bottom: 1px solid var(--hairline);
+  font-size: var(--fs-sm);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
-.big-container.dark .details-table th, .big-container.dark .details-table td {
-  border-bottom:1px solid rgba(255,255,255,0.03);
+.all-jobs-table th { font-size: var(--fs-xs); font-weight: 600; color: var(--muted); }
+.all-jobs-table .aj-name {
+  text-align: left;
+  white-space: normal;
+  word-break: break-word;
+  width: 34%;
 }
-
-/* notification/modal/disclaimer */
-.notification {
-  position:fixed;
-  left:50%;
-  top:60%;
-  transform:translate(-50%,-50%);
-  background:#0b1220;
-  padding:12px 16px;
-  border-radius:10px;
-  color:#fff;
-  z-index:60;
-}
-.modal-backdrop {
-  position:fixed;
-  inset:0;
-  background:rgba(0,0,0,0.5);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  z-index:70;
-}
-.modal {
-  background:#0c1320;
-  padding:12px;
-  border-radius:10px;
-  color:#fff;
-  border:1px solid rgba(255,255,255,0.03);
-  max-width: 90%;
-}
-.modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:10px }
-.disclaimer {
-  text-align:center;
-  color:var(--muted);
-  margin-top:12px;
-  font-size:12px;
-}
-
-.modal-close-btn {
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border-radius: 8px;
-  font-size: 12px;
-  line-height: 1;
-}
-
-/* responsiveness: mobile & iPhone 14 Pro */
-@media (max-width:900px){
-  .info-grid { grid-template-columns: 1fr }
-  .cal-grid { gap:6px }
-  .cal-cell { min-height:90px; padding:6px }
-  .controls { flex-direction: column; align-items: stretch; }
-  .btn { width: 100%; text-align: center; }
-  .job-tabs { flex-direction: column; align-items: stretch; }
-  .job-tabs-scroll { width: 100%; }
-}
-
-/* small-screen calendar: allow horizontal scroll while keeping readable cells */
-@media (max-width:420px){
-  .calendar-card { overflow-x: auto; }
-  .cal-grid {
-    grid-template-columns: repeat(7, 80px);
-    width: max-content;
-  }
-  .cal-cell {
-    min-width: 80px;
-    padding: 8px 4px;
-  }
-  .cal-input {
-    font-size: 16px;
-    padding: 8px 4px;
-    width: 95%;
-  }
-  .cal-daynum {
-    font-size: 16px;
-  }
-  .cal-earn {
-    font-size: 14px;
-  }
-}
-
-/* Responsive calendar grid */
-.cal-grid {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(140px, 1fr));
-  gap: 10px;
-  width: 100%;
-  box-sizing: border-box;
-  overflow-x: visible;
-  justify-items: stretch;
-  justify-content: stretch;
-  align-content: stretch;
-  flex: 1;
-  /* On mobile, allow horizontal scroll if needed */
-}
-
-@media (max-width: 640px) {
-  .calendar-card {
-    min-width: 0 !important;
-    width: 100% !important;
-    padding: 0 2px;
-  }
-  .cal-grid {
-    grid-template-columns: repeat(7, minmax(48px, 1fr));
-    gap: 6px;
-    font-size: 16px;
-    overflow-x: visible;
-  justify-items: stretch;
-  justify-content: stretch;
-  align-content: stretch;
-  }
-  .cal-cell {
-    min-width: 48px;
-    min-height: 60px;
-    padding: 10px 4px;
-  }
-  .cal-input {
-    font-size: 16px;
-    padding: 8px 4px;
-    width: 100%;
-  }
-  .cal-daynum {
-    font-size: 16px;
-  }
-  .cal-earn {
-    font-size: 14px;
-  }
-}
-
-@media (max-width: 420px) {
-  .calendar-card { overflow-x: auto; }
-  .cal-grid {
-    grid-template-columns: repeat(7, 80px);
-    width: max-content;
-  }
-  .cal-cell {
-    min-width: 80px;
-    padding: 8px 4px;
-  }
-  .cal-input {
-    font-size: 16px;
-    padding: 8px 4px;
-    width: 95%;
-  }
-  .cal-daynum {
-    font-size: 16px;
-  }
-  .cal-earn {
-    font-size: 14px;
-  }
-}
-
-/* Desktop: wider cells */
-@media (min-width: 701px) {
-  .cal-grid {
-    grid-template-columns: repeat(7, minmax(140px, 1fr));
-    gap: 10px;
-  }
-  .cal-cell {
-    min-width: 70px;
-    padding: 4px 4px;
-  }
-  .cal-input {
-    font-size: 15px;
-    padding: 3px 3px;
-    width: 90%;
-  }
-  .cal-daynum {
-    font-size: 15px;
-  }
-  .cal-earn {
-    font-size: 13px;
-  }
-}
-
-/* Always allow horizontal scroll if needed */
-.calendar-card {
-  overflow-x: visible;
-  justify-items: stretch;
-  justify-content: stretch;
-  align-content: stretch;
-}
-
-/* Make sure calendar header is also responsive */
-.calendar-header {
-  flex-wrap: wrap;
-  gap: 8px;
-  width: 100%;
-}
-
-.cal-head {
-  margin-bottom: 8px;
-  width: 100%;
-}
-.cal-head-cell {
-  background: transparent;
-  text-align: center;
+.all-jobs-table .active-job-row td { font-weight: 700; }
+.all-jobs-table .all-jobs-total td {
   font-weight: 700;
-  color: var(--muted);
-  font-size: inherit;
-  padding: 2px 0;
+  border-top: 2px solid rgba(0, 0, 0, 0.12);
+  border-bottom: none;
+}
+.big-container.dark .all-jobs-table .all-jobs-total td { border-top-color: rgba(255, 255, 255, 0.18); }
+
+.combine-jobs-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-top: var(--s3);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  min-height: 44px;
+}
+.combine-jobs-toggle input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
 }
 
-.calendar-summary-scroll {
-  width: 100%;
-  overflow-x: auto;
-  padding-bottom: 4px;
+/* --------------------------------------------- tables: stacked on phones -- */
+
+/*
+ * Below 700px a ten-column money table cannot be read sideways. Each row
+ * becomes its own card, with the column name pulled from the cell's
+ * data-label attribute. Above the breakpoint they go back to being tables.
+ */
+.stack-table,
+.stack-table tbody,
+.stack-table tr,
+.stack-table td { display: block; }
+
+.stack-table thead { display: none; }
+
+.stack-table tr {
+  border: 1px solid var(--hairline);
+  border-radius: var(--r2);
+  padding: var(--s2);
+  margin-bottom: var(--s2);
+  background: var(--surface-sunken);
 }
+
+.stack-table td {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s1) 0;
+  border: none;
+  text-align: right;
+  font-size: var(--fs-md);
+  font-variant-numeric: tabular-nums;
+}
+.stack-table td::before {
+  content: attr(data-label);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--muted);
+  text-align: left;
+  flex: 0 0 auto;
+}
+/* The empty-state row spans everything and has no label. */
+.stack-table td[colspan] {
+  justify-content: center;
+  text-align: center;
+}
+.stack-table td[colspan]::before { content: none; }
+
+/* ------------------------------------------------------------ calendar --- */
+
+.calendar-summary-scroll { width: 100%; }
 .calendar-summary-wrap {
   display: flex;
-  gap: 16px;
-  align-items: flex-start;
-  min-width: 1320px;
-}
-
-.calendar-summary-wrap .card {
-  margin: 0;
-}
-
-.calendar-card {
-  min-width: 980px;
-  width: 980px;
-  max-width: none;
-  height: auto;
-  display: flex;
   flex-direction: column;
-  overflow-x: auto;
+  gap: var(--s3);
+  width: 100%;
+  min-width: 0;
 }
-
-.roster-card {
-  width: 320px;
-  min-width: 320px;
-  max-width: 320px;
-  align-self: flex-start;
-  height: auto;
-  display: flex;
-  flex-direction: column;
-}
-
+.calendar-card,
+.roster-card,
 .biweekly-card {
   width: 100%;
-}
-
-.roster-list {
-  --roster-rows: 5;
-  --roster-row-min: 110px;
-  --roster-gap: 10px;
-  display: grid;
-  grid-template-rows: repeat(var(--roster-rows), minmax(var(--roster-row-min), 1fr));
-  gap: var(--roster-gap);
-  overflow-y: auto;
-}
-
-.roster-item {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  min-height: var(--roster-row-min);
-  position: relative;
 }
 
-.roster-meta {
+.calendar-header {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--s2);
 }
-
-.roster-actions {
+.calendar-nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  flex-wrap: nowrap;
+  gap: var(--s2);
+  width: 100%;
+}
+.month-title {
+  flex: 1 1 auto;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1rem;
+}
+.calendar-nav .btn { flex: 0 0 auto; }
+
+.cal-hint {
+  margin: 0 0 var(--s2) 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+.grid-7,
+.cal-head,
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--s1);
+}
+.cal-head { margin-bottom: var(--s1); }
+.cal-head-cell {
+  text-align: center;
+  font-weight: 700;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+.cal-cell {
+  min-width: 0;
+  padding: var(--s1) 2px;
+  border-radius: var(--r1);
+  background: var(--surface-sunken);
+  border: 1px solid var(--hairline);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  overflow: hidden;
+}
+.big-container.light .cal-cell { border-color: rgba(15, 23, 42, 0.06); }
+.cal-cell.empty { background: transparent; border-style: dashed; }
+.cal-cell.today { outline: 2px solid rgba(40, 200, 118, 0.55); outline-offset: -2px; }
+.cal-cell.start { outline: 2px solid rgba(255, 200, 87, 0.65); outline-offset: -2px; }
+
+.cal-daynum { font-weight: 700; font-size: var(--fs-xs); line-height: 1.2; }
+.cal-hours,
+.cal-earn {
+  font-size: 9px;
+  line-height: 1.2;
+  color: var(--muted);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cal-hours { color: inherit; font-weight: 600; font-size: 10px; }
+
+/* the tappable phone cell */
+.cal-cell-compact {
+  /* 56px tall keeps the whole month on one screen and stays tappable. */
+  min-height: 56px;
+  justify-content: flex-start;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: center;
+}
+.cal-cell-compact.has-hours { border-color: var(--primary-1); }
+
+/* ------------------------------------------------- day controls / sheet -- */
+
+.day-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  width: 100%;
+  min-width: 0;
+}
+.day-times {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s2);
+}
+.day-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+.day-field-label {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.day-reset { width: 100%; }
+
+.day-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  font-size: var(--fs-md);
+}
+.day-sheet-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding-top: var(--s2);
+  font-size: var(--fs-md);
+}
+
+/* Ant Design TimePicker, skinned to match the other inputs */
+.cal-input.ant-picker {
+  padding: 0 var(--s2);
+  background: transparent;
+  box-shadow: none;
+}
+.big-container.light .cal-input.ant-picker { background: #fff; }
+.cal-input.ant-picker .ant-picker-input > input {
+  text-align: center;
+  font-size: var(--fs-input);
+}
+.cal-input.ant-picker .ant-picker-suffix { color: var(--muted); }
+
+/* --------------------------------------------------------------- roster -- */
+
+.roster-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+.roster-item {
+  border: 1px solid var(--border);
+  border-radius: var(--r1);
+  padding: var(--s2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  position: relative;
+}
+.big-container.dark .roster-item { border-color: var(--hairline); }
+.roster-meta { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-sm); }
+.roster-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
   margin-top: auto;
   width: 100%;
 }
-
 .roster-actions-buttons {
   display: flex;
-  gap: 8px;
-  flex-direction: column;
-  align-items: stretch;
-  flex-wrap: nowrap;
+  gap: var(--s2);
+  flex-direction: row;
   width: 100%;
 }
-
+.roster-actions .btn,
+.roster-actions .file-upload-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: var(--fs-sm);
+}
+.roster-actions .file-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 .roster-preview {
   width: 100%;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r2);
   overflow: hidden;
-  background: #f8fafc;
+  background: var(--surface-sunken);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   padding: 0;
 }
-
 .roster-preview img {
   width: 100%;
-  height: 140px;
+  height: 120px;
   object-fit: contain;
   display: block;
-  background: #fff;
 }
-
 .roster-remove-x {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 22px;
-  height: 22px;
+  top: var(--s1);
+  right: var(--s1);
+  width: 28px;
+  height: 28px;
   padding: 0;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: #ff5c7c;
+  border-radius: var(--r-pill);
+  border: none;
+  background: var(--danger);
   color: #fff;
   font-weight: 700;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   line-height: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  z-index: 1;
 }
-
-.roster-actions .btn,
-.roster-actions .file-upload-btn {
-  padding: 4px 6px;
-  border-radius: 7px;
-  font-size: 0.78rem;
-  width: 100%;
-  text-align: center;
-}
-
-.roster-actions .file-upload-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-
 .roster-thumb {
   width: 44px;
   height: 44px;
   border: 1px solid var(--border);
   border-radius: 6px;
   overflow: hidden;
-  background: #f8fafc;
+  background: var(--surface-sunken);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   padding: 0;
+  flex: 0 0 auto;
 }
+.roster-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
-.roster-thumb img {
+/* ------------------------------------------------ modals / toast / foot -- */
+
+.notification {
+  position: fixed;
+  left: 50%;
+  bottom: var(--s5);
+  transform: translateX(-50%);
+  background: #0b1220;
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r2);
+  color: #fff;
+  z-index: 60;
+  max-width: calc(100% - var(--s5));
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s3);
+  z-index: 70;
+}
+.modal {
+  background: #0c1320;
+  padding: var(--s3);
+  border-radius: var(--r2);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.06);
   width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
 }
-
-@media (max-width: 900px) {
-  .roster-list {
-    --roster-row-min: 90px;
-    --roster-gap: 6px;
-  }
+.modal .cal-input,
+.modal .control-input { background: rgba(255, 255, 255, 0.06); color: #fff; }
+.modal-actions {
+  display: flex;
+  gap: var(--s2);
+  justify-content: flex-end;
+  margin-top: var(--s3);
 }
-
-@media (max-width: 900px) {
-  .calendar-summary-wrap {
-    flex-direction: column;
-    min-width: 0;
-    width: 100%;
-  }
-  .calendar-card {
-    order: 1;
-    min-width: 0;
-    width: 100%;
-  }
-  .roster-card {
-    order: 2;
-    width: 100%;
-    min-width: 0;
-    max-width: 100%;
-    box-sizing: border-box;
-  }
-  .calendar-summary-scroll {
-    overflow-x: hidden;
-    width: 100%;
-    box-sizing: border-box;
-  }
-  .cal-grid,
-  .cal-head {
-    grid-template-columns: repeat(7, minmax(0, 1fr));
-  }
-  .cal-cell {
-    min-width: 0;
-  }
+/* the day editor rides up from the bottom edge like a native sheet */
+.modal-backdrop.day-sheet-backdrop {
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
 }
-
-
-@media (max-width: 600px) {
-  .cal-cell .lunch-minutes-input {
-    width: 100%;
-    max-width: 100%;
-    font-size: 14px;
-  }
-  .calendar-summary-wrap {
-    overflow-x: auto;
-  }
-  .calendar-card, .biweekly-card, .roster-card {
-    min-width: unset !important;
-    width: 100% !important;
-  }
-  .cal-grid {
-    font-size: 14px;
-  }
-}
-
-/* --- Add or update these rules --- */
-
-/* On small screens, make the calendar grid fit the screen width */
-@media (max-width: 600px) {
-  .cal-grid,
-  .cal-head {
-    min-width: 0 !important;
-    width: 100% !important;
-    font-size: 13px;
-  }
-  .cal-grid {
-    grid-template-columns: repeat(7, 1fr) !important;
-    width: 100% !important;
-  }
-  .cal-cell,
-  .cal-head-cell {
-    min-width: 0 !important;
-    max-width: unset !important;
-    font-size: 13px;
-    padding: 4px 1px;
-    box-sizing: border-box;
-  }
-  .calendar-card {
-    min-width: 0 !important;
-    width: 100% !important;
-    overflow-x: visible !important;
-  }
-  .calendar-scroll-wrap {
-    overflow-x: visible !important;
-    width: 100% !important;
-  }
-}
-
-/* Optionally, make inputs smaller on mobile */
-@media (max-width: 600px) {
-  .cal-input {
-    font-size: 13px;
-    padding: 4px 2px;
-    width: 100%;
-    min-width: 0;
-    max-width: unset;
-  }
-}
-
-/* --- Add or update these rules for mobile item list --- */
-@media (max-width: 600px) {
-  .items-table th,
-  .items-table td {
-    padding: 4px 2px;
-    font-size: 13px;
-  }
-  .items-table input[type="text"],
-  .items-table input[type="number"] {
-    font-size: 13px;
-    width: 60px !important;
-    min-width: 0 !important;
-    max-width: 80px !important;
-    padding: 3px 2px;
-  }
-  .items-table input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
-  }
-  .item-name {
-    width: 80px !important;
-    min-width: 0 !important;
-    max-width: 120px !important;
-  }
-  .items-table th[style*="width: 140px"],
-  .items-table td[style*="width: 140px"] {
-    width: 70px !important;
-    min-width: 0 !important;
-    max-width: 80px !important;
-  }
-  .items-table th[style*="width: 120px"],
-  .items-table td[style*="width: 120px"] {
-    width: 50px !important;
-    min-width: 0 !important;
-    max-width: 60px !important;
-  }
-  .items-table th[style*="width: 80px"],
-  .items-table td[style*="width: 80px"] {
-    width: 40px !important;
-    min-width: 0 !important;
-    max-width: 50px !important;
-  }
-  .items-scroll {
-    overflow-x: visible;
-  justify-items: stretch;
-  justify-content: stretch;
-  align-content: stretch;
-    width: 100%;
-  }
-}
-
-.lunch-comment {
-  transition: visibility 0.2s;
-}
-
-.cal-cell:hover .lunch-comment {
-  visibility: visible;
-}
-
-.cal-cell .lunch-minutes {
+.modal.day-sheet {
+  width: 100%;
+  max-width: 560px;
+  max-height: 85vh;
+  overflow-y: auto;
+  border-radius: var(--r3) var(--r3) 0 0;
+  padding: var(--s4);
+  padding-bottom: calc(var(--s4) + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  width: 100%;
-  margin-top: 4px;
+  gap: var(--s3);
 }
 
-.cal-cell .lunch-minutes-label {
-  font-size: 11px;
-  color: var(--muted);
-  white-space: normal;
-  text-align: center;
-  line-height: 1.1;
-}
-
-.cal-cell .lunch-minutes-input {
-  width: 64px;
-  max-width: 64px;
-  height: 24px;
-  text-align: center;
-  margin: 0 auto;
-  display: block;
-  padding: 2px 4px;
-  font-size: 12px;
-  line-height: 1.2;
-  background: #fff;
-  border: 1px solid rgba(0,0,0,0.12);
-  border-radius: 8px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
-  box-sizing: border-box;
-  appearance: textfield;
-  -moz-appearance: textfield;
-}
-
-.cal-cell .lunch-minutes-input::-webkit-outer-spin-button,
-.cal-cell .lunch-minutes-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-@media (max-width: 600px) {
-  .cal-cell .lunch-minutes-label {
-    font-size: 10px;
-    white-space: normal;
-    text-align: center;
-    line-height: 1.1;
-  }
-  .cal-cell .lunch-minutes-input {
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    height: 24px;
-    font-size: 11px;
-  }
-}
-
-/* ensure biweekly table responsive on mobile */
-@media (max-width: 640px) {
-  .biweekly-card { overflow-x: auto; padding: 8px; }
-  .biweekly-card table { min-width: 720px; width: max-content; }
-}
-
-/* ...existing code... */
-
-/* Add this at the very end of your CSS file: */
-body,
-html {
-  background: #f7f8fa; /* default light background */
-  transition: background 0.25s;
-  margin: 0;
+.modal-close-btn {
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
   padding: 0;
-  min-height: 100vh;
-  width: 100vw;
-  box-sizing: border-box;
-}
-
-body.dark,
-html.dark {
-  background: #000 !important;
-}
-
-/* Make calendar header responsive and prevent overflow */
-.calendar-header {
-  width: 100%;
-  box-sizing: border-box;
-  overflow-x: visible;
-  justify-items: stretch;
-  justify-content: stretch;
-  align-content: stretch;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 4px 0;
-}
-
-.calendar-header > div {
-  flex-wrap: wrap;
-  display: flex;
-  gap: 8px;
-  width: 100%;
-  justify-content: center;
-  align-items: center;
-}
-
-.calendar-nav {
-  display: flex;
-  gap: 8px;
-  width: 100%;
-  justify-content: center;
-  align-items: center;
-}
-
-.month-title {
-  font-size: 1.1em;
-  font-weight: bold;
-  white-space: nowrap;
-  text-align: center;
-  flex: 1 1 auto;
-  min-width: 80px;
-}
-
-/* On small screens, stack or shrink buttons and title */
-@media (max-width: 900px) {
-  .calendar-header {
-    padding: 2px 0;
-    height: auto !important;
-    align-items: stretch;
-  }
-  .calendar-header > .calendar-nav {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr;
-    grid-template-areas:
-      "prev next"
-      "title title";
-    gap: 6px;
-    align-items: center;
-    width: 100%;
-  }
-  .calendar-prev {
-    grid-area: prev;
-    width: 100%;
-    min-width: 0;
-  }
-  .calendar-next {
-    grid-area: next;
-    width: 100%;
-    min-width: 0;
-  }
-  .calendar-header > .calendar-nav .month-title {
-    grid-area: title;
-    font-size: 1em;
-    min-width: 60px;
-    width: 100%;
-    text-align: center;
-  }
-  .btn.small {
-    font-size: 13px;
-    padding: 2px 6px;
-  }
-}
-
-/* Desktop: keep calendar header horizontal */
-.calendar-header {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-direction: row;
-  gap: 8px;
-  width: 100%;
-}
-.calendar-header .month-title {
-  flex: none;
-  margin: 0 16px;
-  text-align: center;
-  width: auto; /* <-- remove width: 100% */
-  margin-top: 0;
-}
-
-.header-actions .header-btn {
-  min-width: 90px;
-  height: 28px;
-  padding: 0 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
+  border-radius: var(--r1);
+  font-size: var(--fs-xs);
   line-height: 1;
-  font-size: 0.85rem;
 }
-
-/* Mobile: stack calendar header vertically */
-@media (max-width: 600px) {
-  .calendar-header {
-    flex-direction: column !important;
-    align-items: stretch !important;
-    gap: 4px !important;
-  }
-  .calendar-header .month-title {
-    text-align: center;
-    width: 100% !important;
-    margin: 8px 0 0 0;
-  }
+.disclaimer {
+  text-align: center;
+  color: var(--muted);
+  margin-top: var(--s3);
+  font-size: var(--fs-xs);
 }
+.disclaimer img { max-width: 160px; height: auto; }
 
-/* Make biweekly summary table horizontally scrollable on mobile */
-@media (max-width: 640px) {
-  .biweekly-card {
-    overflow-x: visible;
-  justify-items: stretch;
-  justify-content: stretch;
-  align-content: stretch;
-    width: 100% !important;
-    min-width: 0 !important;
-    padding: 0 2px;
-  }
-  .biweekly-card table {
-    min-width: 700px;
-    width: max-content;
-    font-size: 13px;
-  }
-  .biweekly-card th, .biweekly-card td {
-    padding: 6px 4px;
-    font-size: 13px;
-    white-space: nowrap;
-  }
-}
+/* ========================================================================== */
+/* 700px and up — tablets: real tables, inline calendar controls              */
+/* ========================================================================== */
 
-/* Force horizontal scroll for pay period summary on small screens */
-@media (max-width: 900px) {
-  .biweekly-card {
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch;
+@media (min-width: 700px) {
+  .big-container {
+    margin: var(--s3) auto;
+    width: calc(100% - var(--s5));
+    padding: var(--s4);
+    gap: var(--s4);
   }
-  .biweekly-card .items-table {
-    min-width: 900px;
-    width: max-content;
-  }
-}
+  .card { padding: var(--s4); }
 
-/* ---------- mobile fixes ---------- */
-
-/* Title and the language/theme buttons stack instead of overflowing the header */
-@media (max-width: 600px) {
   header {
-    flex-wrap: wrap;
-    row-gap: 8px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
   }
-  header > div:first-child {
-    flex: 1 1 100%;
-  }
-  .header-actions {
-    flex: 1 1 100%;
-    justify-content: center;
-  }
-  .title-blob {
-    font-size: 1.9rem;
-    letter-spacing: -0.5px;
-  }
-}
+  .title-blob { font-size: 2.2rem; text-align: left; }
+  .header-actions { justify-content: flex-end; }
+  .header-actions .header-btn { flex: 0 0 auto; min-width: 90px; }
 
-/* A 7-column calendar cannot hold a time picker at phone widths, so let it
-   scroll sideways with usable cells instead of squeezing every column. */
-@media (max-width: 480px) {
-  .calendar-card,
-  .calendar-scroll-wrap {
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch;
+  .info-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--s3); }
+  .value { font-size: var(--fs-lg); }
+
+  .controls-fields { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+  .controls-fields .button-row { grid-column: 1 / -1; }
+  .button-row > .btn,
+  .button-row > .file-upload-btn { flex: 0 0 auto; }
+
+  /* tables go back to being tables */
+  .stack-table,
+  .stack-table tbody,
+  .stack-table tr,
+  .stack-table td { display: revert; }
+  .stack-table thead { display: revert; }
+  .stack-table tr {
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    margin: 0;
+    background: none;
   }
-  .cal-grid,
-  .cal-head {
-    grid-template-columns: repeat(7, 82px) !important;
-    width: max-content !important;
-    min-width: max-content !important;
-  }
-  .cal-cell,
-  .cal-head-cell {
-    min-width: 82px;
-    max-width: 82px;
-    padding: 6px 4px;
-  }
-  .cal-earn,
-  .cal-hours {
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  .stack-table td {
+    border-bottom: 1px solid var(--hairline);
+    padding: var(--s2) var(--s1);
+    text-align: center;
     white-space: nowrap;
   }
+  .stack-table td::before { content: none; }
+  .biweekly-card,
+  .details-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* calendar cells hold their own inputs again */
+  .grid-7,
+  .cal-head,
+  .cal-grid { gap: var(--s2); }
+  .cal-cell {
+    min-height: 150px;
+    padding: var(--s2);
+    gap: var(--s2);
+    justify-content: flex-start;
+  }
+  .cal-head-cell { font-size: var(--fs-sm); }
+  .cal-daynum { font-size: var(--fs-md); }
+  .cal-hours,
+  .cal-earn { font-size: var(--fs-xs); }
+  .cal-earn { margin-top: auto; }
+  .day-times { grid-template-columns: 1fr; }
+  .day-field-label { font-size: 10px; }
+  .cal-input { min-height: 34px; padding: var(--s1); font-size: var(--fs-sm); }
+  .cal-input.ant-picker .ant-picker-input > input { font-size: var(--fs-sm); }
+  .day-reset { min-height: 30px; font-size: var(--fs-xs); }
+
+  .roster-actions-buttons { flex-direction: row; }
+}
+
+/* ========================================================================== */
+/* 1100px and up — desktop: calendar and roster side by side                  */
+/* ========================================================================== */
+
+@media (min-width: 1100px) {
+  .calendar-summary-wrap {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: var(--s4);
+  }
+  .calendar-card { flex: 4 1 0; }
+  .roster-card { flex: 1 1 0; max-width: 340px; }
+
+  .calendar-header { justify-content: flex-start; }
+  .month-title { font-size: 1.1rem; }
+
+  .cal-cell { min-height: 190px; }
+  .day-times { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  .roster-list { display: grid; gap: var(--s2); }
+  .roster-actions-buttons { flex-direction: column; }
+
+  .stack-table td { white-space: nowrap; }
 }

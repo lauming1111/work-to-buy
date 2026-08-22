@@ -397,3 +397,107 @@ test("items marked non-taxable carry no sales tax", () => {
   // no HST, so $161.80 of a flat $1,000 goal
   expect(screen.getByText("16.18%")).toBeInTheDocument();
 });
+
+/* ---------------- mobile layout ---------------- */
+
+/** Make the narrow-viewport media query report a phone until restored. */
+const setNarrowViewport = (narrow: boolean) => {
+  const original = window.matchMedia;
+  window.matchMedia = ((query: string) => ({
+    matches: narrow && query.includes("max-width"),
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia;
+  return () => { window.matchMedia = original; };
+};
+
+const seedSingleJob = () => {
+  localStorage.setItem("w2b_jobs", JSON.stringify([{ id: "cafe", name: "Cafe" }]));
+  localStorage.setItem("w2b_activeJob", "cafe");
+  seedJob("cafe", "20", 8);
+};
+
+test("on a phone the calendar is a compact grid with no inline inputs", () => {
+  const restore = setNarrowViewport(true);
+  try {
+    seedSingleJob();
+    render(<App />);
+
+    // every day is a tap target, and the per-day inputs are gone from the grid
+    expect(document.querySelectorAll(".cal-cell-compact").length).toBeGreaterThan(27);
+    expect(document.querySelectorAll(".cal-cell .cal-hours-input")).toHaveLength(0);
+    expect(screen.getByText("Tap a day to enter hours")).toBeInTheDocument();
+  } finally {
+    restore();
+  }
+});
+
+test("on a desktop the calendar keeps its inline day inputs", () => {
+  const restore = setNarrowViewport(false);
+  try {
+    seedSingleJob();
+    render(<App />);
+
+    expect(document.querySelectorAll(".cal-cell-compact")).toHaveLength(0);
+    expect(document.querySelectorAll(".cal-cell .cal-hours-input").length).toBeGreaterThan(27);
+  } finally {
+    restore();
+  }
+});
+
+test("tapping a day on a phone opens the editor for that date", () => {
+  const restore = setNarrowViewport(true);
+  try {
+    seedSingleJob();
+    render(<App />);
+
+    expect(document.querySelector(".day-sheet")).toBeNull();
+    fireEvent.click(document.querySelector('.cal-cell-compact[aria-label^="2026-01-02"]')!);
+
+    const sheet = document.querySelector(".day-sheet") as HTMLElement;
+    expect(sheet).toBeInTheDocument();
+    expect(within(sheet).getByText("2026-01-02")).toBeInTheDocument();
+    // the seeded 8h day shows its after-tax pay
+    expect(within(sheet).getByText("$161.80")).toBeInTheDocument();
+  } finally {
+    restore();
+  }
+});
+
+test("editing hours in the day editor updates the day, and Done closes it", () => {
+  const restore = setNarrowViewport(true);
+  try {
+    seedSingleJob();
+    render(<App />);
+    fireEvent.click(document.querySelector('.cal-cell-compact[aria-label^="2026-01-02"]')!);
+
+    const sheet = () => document.querySelector(".day-sheet") as HTMLElement;
+    fireEvent.change(sheet().querySelector(".cal-hours-input")!, { target: { value: "4" } });
+
+    // 4h entered, half an hour of lunch comes off, so 3.5h is recorded
+    expect(document.querySelector('.cal-cell-compact[aria-label^="2026-01-02"]')!.textContent).toContain("3.50h");
+
+    fireEvent.click(within(sheet()).getByText("Done"));
+    expect(document.querySelector(".day-sheet")).toBeNull();
+  } finally {
+    restore();
+  }
+});
+
+test("wide tables label every cell so they can stack into cards on a phone", () => {
+  seedSingleJob();
+  render(<App />);
+
+  const period = document.querySelector(".biweekly-card .stack-table tbody tr") as HTMLElement;
+  expect(Array.from(period.querySelectorAll("td")).map(td => td.getAttribute("data-label")))
+    .toEqual(["Period", "Hrs", "Period Date", "Earnings", "Overtime", "Income Tax", "EI", "CPP", "Net", "Take-Home"]);
+
+  const detail = document.querySelector(".details-table.stack-table tbody tr") as HTMLElement;
+  expect(Array.from(detail.querySelectorAll("td")).map(td => td.getAttribute("data-label")))
+    .toEqual(["Date", "Hours", "Earnings", "Income Tax", "EI", "CPP", "After Tax"]);
+});

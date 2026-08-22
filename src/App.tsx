@@ -51,6 +51,35 @@ import {
 
 dayjs.extend(customParseFormat);
 /* ---------------------- App ------------------------ */
+/** True while the viewport is phone-sized. Drives the compact calendar and card tables. */
+const NARROW_QUERY = "(max-width: 700px)";
+
+function useIsNarrow(): boolean {
+  const [narrow, setNarrow] = useState<boolean>(() =>
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia(NARROW_QUERY).matches
+      : false
+  );
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const mq = window.matchMedia(NARROW_QUERY);
+    const sync = () => setNarrow(mq.matches);
+    sync();
+    // A resize listener as well as the media query: some environments resize the
+    // viewport without ever firing the query's change event.
+    window.addEventListener("resize", sync);
+    // Safari before 14 only has the deprecated listener API.
+    if (mq.addEventListener) mq.addEventListener("change", sync);
+    else mq.addListener(sync);
+    return () => {
+      window.removeEventListener("resize", sync);
+      if (mq.removeEventListener) mq.removeEventListener("change", sync);
+      else mq.removeListener(sync);
+    };
+  }, []);
+  return narrow;
+}
+
 export default function App(): JSX.Element {
   const initialJobs = getInitialJobs();
   const initialActiveJobId = getInitialActiveJobId(initialJobs);
@@ -81,6 +110,9 @@ export default function App(): JSX.Element {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const calGridRef = useRef<HTMLDivElement | null>(null);
   const [weekRowTemplate, setWeekRowTemplate] = useState<string | null>(null);
+  // On phones the month grid is read-only; tapping a day opens this editor sheet.
+  const [editingDate, setEditingDate] = useState<string | null>(null);
+  const isNarrow = useIsNarrow();
   // persist on change
   useEffect(() => { safeSetItem(JOBS_STORAGE_KEY, JSON.stringify(jobs)); }, [jobs]);
   useEffect(() => { safeSetItem(ACTIVE_JOB_STORAGE_KEY, activeJobId); }, [activeJobId]);
@@ -854,6 +886,12 @@ export default function App(): JSX.Element {
       noRecords: "No records",
       lunchMinutesLabel: "Lunch (min)",
       resetHours: "Reset Hours",
+      done: "Done",
+      startTime: "Start",
+      endTime: "End",
+      hoursWorked: "Hours",
+      afterTaxLabel: "After tax",
+      tapToEdit: "Tap a day to enter hours",
       prevMonth: "Prev",
       nextMonth: "Next",
       imported: "Imported data",
@@ -928,6 +966,12 @@ export default function App(): JSX.Element {
       noRecords: "無紀錄",
       lunchMinutesLabel: "午休(分鐘)",
       resetHours: "重設工時",
+      done: "完成",
+      startTime: "上班",
+      endTime: "下班",
+      hoursWorked: "工時",
+      afterTaxLabel: "稅後",
+      tapToEdit: "點選日期輸入工時",
       prevMonth: "上個月",
       nextMonth: "下個月",
       imported: "已匯入資料",
@@ -959,6 +1003,86 @@ export default function App(): JSX.Element {
       privacyLine: "隱私權：此為純前端應用，所有資料僅保存在你的瀏覽器本機儲存中。",
       disclaimerLine2: "查看我的個人檔案以了解更多！",
     }
+  };
+
+  /**
+   * The editable controls for one day. Rendered inline in each desktop cell and,
+   * on phones, inside the day sheet that opens when a cell is tapped.
+   */
+  const renderDayControls = (dateStr: string) => {
+    const rawEntry = dayHours.find(h => h.date === dateStr);
+    const manualHours =
+      rawEntry?.originalHours != null && !rawEntry?.start && !rawEntry?.end
+        ? rawEntry.originalHours
+        : rawEntry?.hours != null && !rawEntry?.start && !rawEntry?.end
+          ? rawEntry.hours
+          : "";
+    return (
+      <div className="day-controls">
+        <div className="day-times">
+          <label className="day-field">
+            <span className="day-field-label">{labels[lang].startTime}</span>
+            <TimePicker
+              className="cal-input"
+              value={rawEntry?.start ? dayjs(rawEntry.start, "HH:mm") : undefined}
+              onChange={e => handleTimeInput(dateStr, "start", e)}
+              defaultOpenValue={dayjs("00:00", "HH:mm")}
+              format={"HH:mm"}
+              needConfirm={true}
+            />
+          </label>
+          <label className="day-field">
+            <span className="day-field-label">{labels[lang].endTime}</span>
+            <TimePicker
+              className="cal-input"
+              value={rawEntry?.end ? dayjs(rawEntry.end, "HH:mm") : undefined}
+              onChange={e => handleTimeInput(dateStr, "end", e)}
+              defaultOpenValue={dayjs("00:00", "HH:mm")}
+              format={"HH:mm"}
+              needConfirm={true}
+            />
+          </label>
+        </div>
+
+        <label className="day-field">
+          <span className="day-field-label">{labels[lang].hoursWorked}</span>
+          <input
+            className="cal-input cal-hours-input"
+            type="number"
+            min={0}
+            max={24}
+            step={0.25}
+            inputMode="decimal"
+            value={manualHours}
+            onChange={e => handleHourInput(dateStr, e.target.value)}
+            placeholder={labels[lang].hoursPlaceholder}
+          />
+        </label>
+
+        <label className="day-field lunch-minutes">
+          <span className="day-field-label lunch-minutes-label">{labels[lang].lunchMinutesLabel}</span>
+          <input
+            id={`lunch-minutes-${dateStr}`}
+            className="cal-input lunch-minutes-input"
+            type="number"
+            min={0}
+            max={180}
+            step={5}
+            inputMode="numeric"
+            value={rawEntry?.lunchMinutes ?? ""}
+            onChange={e => handleLunchMinutesInput(dateStr, e.target.value)}
+          />
+        </label>
+
+        <button
+          className="btn small day-reset"
+          onClick={() => handleHourInput(dateStr, "")}
+          aria-label={labels[lang].resetHours}
+        >
+          {labels[lang].resetHours}
+        </button>
+      </div>
+    );
   };
 
   return (
@@ -1079,7 +1203,7 @@ export default function App(): JSX.Element {
 
       {/* Controls (note: Prev / Next moved to calendar header) */}
       <div className="card controls">
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+        <div className="controls-fields">
           <div>
             <label className="small-label">{labels[lang].hourlyRate}</label>
             <input className="control-input" type="number" value={hourlyRate} onChange={e => setHourlyRate(Number(e.target.value))} />
@@ -1099,7 +1223,7 @@ export default function App(): JSX.Element {
             </select>
           </div>
 
-          <div style={{ marginTop: 25, display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div className="button-row">
             <button className="btn" onClick={autoFillWeekdays}>{labels[lang].autoFill}</button>
             <button className="btn warn" onClick={resetMonthHours}>{labels[lang].reset}</button>
             <button className="btn success" onClick={saveAll}>{labels[lang].save}</button>
@@ -1157,9 +1281,9 @@ export default function App(): JSX.Element {
 
       {/* Calendar + Roster (Prev/Month/Next on top of calendar) */}
       <div className="calendar-summary-scroll">
-        <div className="calendar-summary-wrap" style={{ display: "flex", gap: 12 }}>
-        <div className="card calendar-card" style={{ flex: 4, display: "flex", flexDirection: "column" }}>
-          <div className="calendar-header" style={{ height: 40, display: "flex", alignItems: "center" }}>
+        <div className="calendar-summary-wrap">
+        <div className="card calendar-card">
+          <div className="calendar-header">
             <div className="calendar-nav">
               <button className="btn small calendar-prev" onClick={prevMonth}>{labels[lang].prevMonth}</button>
               <div className="month-title">{currentDate.toLocaleString(undefined, { month: "long", year: "numeric" })}</div>
@@ -1168,18 +1292,16 @@ export default function App(): JSX.Element {
             </div>
           </div>
 
-          <div className="cal-head grid-7" style={{ height: 30 }}>
+          {isNarrow && <p className="cal-hint">{labels[lang].tapToEdit}</p>}
+
+          <div className="cal-head grid-7">
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(d => <div key={d} className="cal-head-cell">{d}</div>)}
           </div>
 
           <div
             ref={calGridRef}
             className="cal-grid"
-            style={{
-              flex: 1,
-              display: "grid",
-              gridTemplateRows: weekRowTemplate ?? `repeat(${rows}, 1fr)`,
-            }}
+            style={isNarrow ? undefined : { gridTemplateRows: weekRowTemplate ?? `repeat(${rows}, 1fr)` }}
           >
             {Array.from({ length: totalGrid }).map((_, idx) => {
               const dayNum = idx - firstWeekday + 1;
@@ -1199,114 +1321,45 @@ export default function App(): JSX.Element {
                   : biWeekIndex;
               const bgColor = BIWEEK_COLORS[periodIndex % BIWEEK_COLORS.length];
 
+              const hoursText = rawEntry?.hours != null && !isNaN(rawEntry.hours)
+                ? `${rawEntry.hours.toFixed(2)}h`
+                : "";
+              const earnText = rec ? `$${rec.afterTax.toFixed(2)}` : "";
+
+              // On phones the cell is a tap target; the inputs live in the day sheet.
+              if (isNarrow) {
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    className={`cal-cell cal-cell-compact ${isToday ? "today" : ""} ${isStart ? "start" : ""} ${hoursText ? "has-hours" : ""}`}
+                    style={{ background: bgColor }}
+                    onClick={() => setEditingDate(dateStr)}
+                    aria-label={`${dateStr}${hoursText ? ` ${hoursText}` : ""}`}
+                  >
+                    <span className="cal-daynum">{dayNum}</span>
+                    <span className="cal-hours">{hoursText}</span>
+                    <span className="cal-earn">{earnText}</span>
+                  </button>
+                );
+              }
+
               return (
                 <div key={idx} className={`cal-cell ${isToday ? "today" : ""} ${isStart ? "start" : ""}`} style={{
                   background: bgColor,
                   border: isToday ? "2px solid #1976d2" : undefined,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  padding: 2,
-                  minWidth: 0,
-                  position: "relative",
                 }}>
                   <div className="cal-daynum">{dayNum}</div>
-
-                  {/* Start/End time input, larger for mobile */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 2, width: "100%", alignItems: "center" }}>
-                    <TimePicker
-                      className="cal-input"
-                      value={rawEntry?.start ? dayjs(rawEntry?.start, 'HH:mm') : undefined}
-                      onChange={e => handleTimeInput(dateStr, "start", e)}
-                      defaultOpenValue={dayjs('00:00', 'HH:mm')} format={'HH:mm'}
-                      needConfirm={true}
-                    />
-                    <TimePicker
-                      className="cal-input"
-                      value={rawEntry?.end ? dayjs(rawEntry?.end, 'HH:mm') : undefined}
-                      onChange={e => handleTimeInput(dateStr, "end", e)}
-                      defaultOpenValue={dayjs('00:00', 'HH:mm')} format={'HH:mm'}
-                      needConfirm={true} />
-                  </div>
-
-                  {/* Old: Direct hours input for backward compatibility */}
-                  <input
-                    className="cal-input"
-                    type="number"
-                    min={0}
-                    max={24}
-                    step={0.25}
-                    style={{
-                      width: "100%",
-                      maxWidth: 110,
-                      fontSize: 18,
-                      marginTop: 2,
-                      boxSizing: "border-box",
-                    }}
-                    value={
-                      rawEntry?.originalHours != null && (!rawEntry?.start && !rawEntry?.end)
-                        ? rawEntry.originalHours
-                        : rawEntry?.hours != null && (!rawEntry?.start && !rawEntry?.end)
-                          ? rawEntry.hours
-                          : ""
-                    }
-                    onChange={e => handleHourInput(dateStr, e.target.value)}
-                    placeholder={labels[lang].hoursPlaceholder}
-                  />
-
-                  {/* Show calculated hours */}
-                  <div className="cal-hours" style={{ fontSize: 13, marginTop: 2 }}>
-                    {rawEntry?.hours != null && !isNaN(rawEntry.hours) ? `${rawEntry.hours.toFixed(2)}h` : ""}
-                  </div>
-
-                  {/* daily after-tax (if exists) */}
-                  <div className="cal-earn" style={{ fontSize: 13 }}>
-                    {rec ? `$${rec.afterTax.toFixed(2)}` : ""}
-                  </div>
-
-                  {/* Lunch minutes (placed above reset button) */}
-                  <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 6, marginTop: 6 }}>
-                    <div className="lunch-minutes">
-                      <label className="lunch-minutes-label" htmlFor={`lunch-minutes-${dateStr}`}>
-                        {labels[lang].lunchMinutesLabel}
-                      </label>
-                      <input
-                        id={`lunch-minutes-${dateStr}`}
-                        className="cal-input lunch-minutes-input"
-                        type="number"
-                        min={0}
-                        max={180}
-                        step={5}
-                        value={rawEntry?.lunchMinutes ?? ""}
-                        onChange={e => handleLunchMinutesInput(dateStr, e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Reset button for manual hours (uses translated label) */}
-                  <button
-                    className="btn small"
-                    style={{
-                      marginBottom: 2,
-                      width: "100%",
-                      maxWidth: 110,
-                      fontSize: 12,
-                      padding: "2px 0",
-                      boxSizing: "border-box",
-                    }}
-                    onClick={() => handleHourInput(dateStr, "")}
-                    tabIndex={0}
-                    aria-label={labels[lang].resetHours}
-                  >
-                    {labels[lang].resetHours}
-                  </button>
+                  {renderDayControls(dateStr)}
+                  <div className="cal-hours">{hoursText}</div>
+                  <div className="cal-earn">{earnText}</div>
                 </div>
                 );
               })}
             </div>
           </div>
 
-        <div className="card roster-card" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <div className="card roster-card">
           <div className="calendar-header" style={{ height: 40, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <h3 style={{ margin: 0 }}>{labels[lang].roster}</h3>
             <select className="control-input" style={{ width: "auto", margin: 0 }} value={rosterMode} onChange={e => setRosterMode(e.target.value as "weekly" | "monthly")}>
@@ -1320,9 +1373,7 @@ export default function App(): JSX.Element {
 
           <div
             className="roster-list"
-            style={{
-              flex: 1,
-              display: "grid",
+            style={isNarrow ? undefined : {
               gridTemplateRows: rosterMode === "weekly"
                 ? (weekRowTemplate ?? `repeat(${rows}, 1fr)`)
                 : "1fr",
@@ -1381,7 +1432,7 @@ export default function App(): JSX.Element {
       </div>
 
       {/* Export / Import / Save / Clear */}
-      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap" }}>
+      <div className="button-row export-row">
         <button className="btn primary" onClick={exportData}>{labels[lang].export}</button>
         <button className="btn primary" onClick={exportAllData}>{labels[lang].exportAll}</button>
 
@@ -1396,7 +1447,7 @@ export default function App(): JSX.Element {
 
       <div className="card biweekly-card">
         <h3>{useMonthlyRule ? "Monthly Summary" : useSemiMonthlyRule ? "Pay Period Summary" : "Bi-weekly Summary"}</h3>
-        <table className="items-table">
+        <table className="items-table stack-table">
           <thead>
             <tr>
               {[
@@ -1464,16 +1515,16 @@ export default function App(): JSX.Element {
               return (
                 <tr key={b.index}>
                   {[
-                    <td key="index">{b.index}</td>,
-                    <td key="hours">{round2(hours)}</td>,
-                    <td key="dates">{periodDates}</td>,
-                    <td key="regular">${round2(regularEarnings).toFixed(2)}</td>,
-                    <td key="overtime">${round2(overtimeEarnings).toFixed(2)}</td>,
-                    <td key="income-tax">${round2(displayIncomeTax).toFixed(2)}</td>,
-                    <td key="ei">${round2(displayEmployeeInsurance).toFixed(2)}</td>,
-                    <td key="cpp">${round2(displayCpp).toFixed(2)}</td>,
-                    <td key="net">${round2(displayNet).toFixed(2)}</td>,
-                    <td key="take-home">${round2(displayTakeHome).toFixed(2)}</td>,
+                    <td key="index" data-label="Period">{b.index}</td>,
+                    <td key="hours" data-label="Hrs">{round2(hours)}</td>,
+                    <td key="dates" data-label="Period Date">{periodDates}</td>,
+                    <td key="regular" data-label={useUnlawfulRule ? "Earnings (<=88)" : "Earnings"}>${round2(regularEarnings).toFixed(2)}</td>,
+                    <td key="overtime" data-label={useUnlawfulRule ? "Earnings (>88)" : "Overtime"}>${round2(overtimeEarnings).toFixed(2)}</td>,
+                    <td key="income-tax" data-label="Income Tax">${round2(displayIncomeTax).toFixed(2)}</td>,
+                    <td key="ei" data-label="EI">${round2(displayEmployeeInsurance).toFixed(2)}</td>,
+                    <td key="cpp" data-label="CPP">${round2(displayCpp).toFixed(2)}</td>,
+                    <td key="net" data-label={useUnlawfulRule ? "Net (<88)" : "Net"}>${round2(displayNet).toFixed(2)}</td>,
+                    <td key="take-home" data-label="Take-Home">${round2(displayTakeHome).toFixed(2)}</td>,
                   ]}
                 </tr>
               );
@@ -1486,7 +1537,7 @@ export default function App(): JSX.Element {
       <div className="card">
         <h3>{labels[lang].details}</h3>
         <div className="details-scroll">
-          <table className="details-table">
+          <table className="details-table stack-table">
             <thead>
               <tr>
                 {[
@@ -1509,13 +1560,13 @@ export default function App(): JSX.Element {
               {detailedHistory.map(d => (
                 <tr key={d.date}>
                   {[
-                    <td key="date">{d.date}</td>,
-                    <td key="hours">{d.hours.toFixed(2)}</td>,
-                    <td key="earnings">${d.earnings.toFixed(2)}</td>,
-                    <td key="tax">${d.incomeTax.toFixed(2)}</td>,
-                    <td key="ei">${d.employeeInsurance.toFixed(2)}</td>,
-                    <td key="cpp">${d.cpp.toFixed(2)}</td>,
-                    <td key="after">${d.afterTax.toFixed(2)}</td>,
+                    <td key="date" data-label="Date">{d.date}</td>,
+                    <td key="hours" data-label="Hours">{d.hours.toFixed(2)}</td>,
+                    <td key="earnings" data-label="Earnings">${d.earnings.toFixed(2)}</td>,
+                    <td key="tax" data-label="Income Tax">${d.incomeTax.toFixed(2)}</td>,
+                    <td key="ei" data-label="EI">${d.employeeInsurance.toFixed(2)}</td>,
+                    <td key="cpp" data-label="CPP">${d.cpp.toFixed(2)}</td>,
+                    <td key="after" data-label="After Tax">${d.afterTax.toFixed(2)}</td>,
                   ]}
                 </tr>
               ))}
@@ -1549,6 +1600,25 @@ export default function App(): JSX.Element {
             <div className="modal-actions">
               <button className="btn" onClick={() => setRosterConfirm(null)}>{labels[lang].cancel}</button>
               <button className="btn danger" onClick={() => { clearRosterImage(rosterConfirm.mode, rosterConfirm.key); setRosterConfirm(null); }}>{labels[lang].rosterRemoveOk}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* day editor sheet (phones) */}
+      {editingDate && (
+        <div className="modal-backdrop day-sheet-backdrop" onClick={() => setEditingDate(null)}>
+          <div className="modal day-sheet" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
+            <div className="day-sheet-head">
+              <strong>{editingDate}</strong>
+              <button className="btn small" onClick={() => setEditingDate(null)}>{labels[lang].done}</button>
+            </div>
+            {renderDayControls(editingDate)}
+            <div className="day-sheet-summary">
+              <span>{labels[lang].afterTaxLabel}</span>
+              <strong>
+                {detailedMap.get(editingDate) ? `$${detailedMap.get(editingDate)!.afterTax.toFixed(2)}` : "$0.00"}
+              </strong>
             </div>
           </div>
         </div>
